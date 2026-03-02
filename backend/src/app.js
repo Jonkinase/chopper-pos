@@ -1,0 +1,48 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+
+const authRoutes = require('./modules/auth/auth.routes');
+const usersRoutes = require('./modules/users/users.routes');
+const branchesRoutes = require('./modules/branches/branches.routes');
+const productsRoutes = require('./modules/products/products.routes');
+const inventoryRoutes = require('./modules/inventory/inventory.routes');
+const salesRoutes = require('./modules/sales/sales.routes');
+const clientsRoutes = require('./modules/clients/clients.routes');
+const accountsRoutes = require('./modules/accounts/accounts.routes');
+const quotesRoutes = require('./modules/quotes/quotes.routes');
+const metricsRoutes = require('./modules/metrics/metrics.routes');
+
+const errorMiddleware = require('./middleware/error.middleware');
+
+const app = express();
+
+// Global Middlewares
+app.use(helmet());
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(morgan('dev'));
+app.use(express.json());
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/api/branches', branchesRoutes);
+app.use('/api/products', productsRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/sales', salesRoutes);
+app.use('/api/clients', clientsRoutes);
+app.use('/api/accounts', accountsRoutes);
+app.use('/api/quotes', quotesRoutes);
+app.use('/api/metrics', metricsRoutes);
+
+// Global Error Handler
+app.use(errorMiddleware);
+
+module.exports = app;
