@@ -194,7 +194,7 @@ const InventoryList = () => {
                       <div>
                         <p className="font-medium text-slate-900 dark:text-slate-100">{mov.reason}</p>
                         <p className="text-xs text-slate-600 dark:text-slate-400 capitalize">{mov.type} • Por: {mov.user_name}</p>
-                        <p className="text-xs text-slate-900 dark:text-slate-1000 mt-1">{new Date(mov.created_at).toLocaleString()}</p>
+                        <p className="text-xs text-slate-900 dark:text-slate-100 mt-1">{new Date(mov.created_at).toLocaleString()}</p>
                       </div>
                       <span className={`font-bold ${mov.quantity > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {mov.quantity > 0 ? '+' : ''}{mov.quantity}

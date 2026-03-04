@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ShoppingCart, CheckCircle2 } from 'lucide-react';
+import { Search, ShoppingCart, CheckCircle2, Zap } from 'lucide-react';
 import CartItem from './CartItem';
 import ProductInputModal from './ProductInputModal';
+import FastItemModal from './FastItemModal';
 import { formatCurrency } from '../../utils/formatters';
 import api from '../../api/api';
 import toast from 'react-hot-toast';
@@ -22,6 +23,7 @@ const SaleCart = ({
   const [searchQuery, setSearchQuery] = useState('');
   
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showFastItem, setShowFastItem] = useState(false);
   
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState('');
@@ -65,11 +67,13 @@ const SaleCart = ({
 
   const handleAddToCart = (item) => {
     setCart(prev => {
-      const existing = prev.findIndex(p => p.producto_id === item.producto_id);
-      if (existing >= 0) {
-        const newCart = [...prev];
-        newCart[existing] = item;
-        return newCart;
+      if (item.producto_id) {
+        const existing = prev.findIndex(p => p.producto_id === item.producto_id);
+        if (existing >= 0) {
+          const newCart = [...prev];
+          newCart[existing] = item;
+          return newCart;
+        }
       }
       return [...prev, item];
     });
@@ -78,6 +82,35 @@ const SaleCart = ({
 
   const removeFromCart = (index) => {
     setCart(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateCartQuantity = (index, newQty) => {
+    const val = parseFloat(newQty);
+    if (isNaN(val) || val <= 0) return;
+
+    setCart(prev => {
+      const newCart = [...prev];
+      const item = { ...newCart[index] };
+      item.cantidad = val;
+      
+      if (item.producto_id) {
+        // Recalculate based on product rules
+        const product = products.find(p => p.id === item.producto_id);
+        if (product) {
+          let price = parseFloat(product.retail_price);
+          item.tipo_precio = 'menudeo';
+          if (product.wholesale_price && product.wholesale_min_qty && item.cantidad >= parseFloat(product.wholesale_min_qty)) {
+            price = parseFloat(product.wholesale_price);
+            item.tipo_precio = 'mayoreo';
+          }
+          item.precio_unitario = price;
+        }
+      }
+      
+      item.subtotal = parseFloat((item.cantidad * item.precio_unitario).toFixed(2));
+      newCart[index] = item;
+      return newCart;
+    });
   };
 
   const total = cart.reduce((acc, item) => acc + item.subtotal, 0);
@@ -125,8 +158,8 @@ const SaleCart = ({
       <div className="flex flex-col lg:flex-row gap-6 h-full min-h-0">
         {/* LEFT COLUMN: BUSCADOR */}
         <div className={`flex-1 flex-col min-h-0 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden ${mobileTab === 'productos' ? 'flex' : 'hidden lg:flex'}`}>
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-            <div className="relative">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
               <Search className="w-5 h-5 absolute left-3 top-3 text-slate-600 dark:text-slate-400" />
               <input
                 type="text"
@@ -136,6 +169,13 @@ const SaleCart = ({
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
               />
             </div>
+            <button
+              onClick={() => setShowFastItem(true)}
+              className="flex items-center justify-center space-x-2 px-4 py-2.5 border-2 border-primary-500 text-primary-500 hover:bg-primary-500 hover:text-white rounded-xl transition-all font-bold text-sm shrink-0"
+            >
+              <Zap className="w-4 h-4 fill-current" />
+              <span>Item Rápido</span>
+            </button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 content-start">
@@ -173,19 +213,24 @@ const SaleCart = ({
         {/* Lista de Carrito */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-900 dark:text-slate-1000">
+            <div className="h-full flex flex-col items-center justify-center text-slate-600 dark:text-slate-400">
               <ShoppingCart className="w-12 h-12 mb-2 opacity-20" />
-              <p className="text-sm">El carrito está vacío</p>
+              <p className="text-sm font-medium">El carrito está vacío</p>
             </div>
           ) : (
             cart.map((item, idx) => (
-              <CartItem key={idx} item={item} onRemove={() => removeFromCart(idx)} />
+              <CartItem 
+                key={idx} 
+                item={item} 
+                onRemove={() => removeFromCart(idx)} 
+                onUpdate={(val) => updateCartQuantity(idx, val)}
+              />
             ))
           )}
         </div>
 
         {/* Panel de Cierre */}
-        <div className="bg-slate-50 dark:bg-slate-900 p-4 border-t border-slate-200 dark:border-slate-700 space-y-4">
+        <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-t border-slate-200 dark:border-slate-700 space-y-4">
           
           <div className="space-y-3">
             <select
@@ -253,6 +298,12 @@ const SaleCart = ({
         isOpen={!!selectedProduct} 
         product={selectedProduct} 
         onClose={() => setSelectedProduct(null)} 
+        onAdd={handleAddToCart}
+      />
+
+      <FastItemModal
+        isOpen={showFastItem}
+        onClose={() => setShowFastItem(false)}
         onAdd={handleAddToCart}
       />
     </div>

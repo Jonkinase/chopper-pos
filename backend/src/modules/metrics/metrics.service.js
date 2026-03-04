@@ -50,12 +50,12 @@ class MetricsService {
     // Current Period Sales & Profit
     const currentStatsQuery = `
       SELECT 
-        COALESCE(SUM(s.total), 0) as total_amount, 
-        COUNT(*) as total_count,
-        COALESCE(SUM(si.subtotal - (si.quantity * p.cost)), 0) as gross_profit
+        COALESCE(SUM(si.subtotal), 0) as total_amount, 
+        COUNT(DISTINCT s.id) as total_count,
+        COALESCE(SUM(si.subtotal - (si.quantity * COALESCE(p.cost, 0))), 0) as gross_profit
       FROM sales s
       JOIN sale_items si ON s.id = si.sale_id
-      JOIN products p ON si.product_id = p.id
+      LEFT JOIN products p ON si.product_id = p.id
       WHERE s.created_at >= $1 AND s.created_at <= $2 AND s.status = 'completada' ${branchFilter}`;
     
     // Previous Period Stats
@@ -254,22 +254,22 @@ class MetricsService {
 
   async getConsolidated() {
     const branchComparisonQuery = `
-      SELECT b.name as label, SUM(s.total) as value, SUM(si.subtotal - (si.quantity * p.cost)) as profit
+      SELECT b.name as label, SUM(si.subtotal) as value, SUM(si.subtotal - (si.quantity * COALESCE(p.cost, 0))) as profit
       FROM sales s
       JOIN branches b ON s.branch_id = b.id
       JOIN sale_items si ON s.id = si.sale_id
-      JOIN products p ON si.product_id = p.id
+      LEFT JOIN products p ON si.product_id = p.id
       WHERE s.status = 'completada'
       GROUP BY b.name
       ORDER BY value DESC`;
 
     const globalStatsQuery = `
       SELECT 
-        SUM(s.total) as total_sales,
-        SUM(si.subtotal - (si.quantity * p.cost)) as total_profit
+        SUM(si.subtotal) as total_sales,
+        SUM(si.subtotal - (si.quantity * COALESCE(p.cost, 0))) as total_profit
       FROM sales s
       JOIN sale_items si ON s.id = si.sale_id
-      JOIN products p ON si.product_id = p.id
+      LEFT JOIN products p ON si.product_id = p.id
       WHERE s.status = 'completada'`;
 
     const branchComparison = await db.query(branchComparisonQuery);

@@ -20,10 +20,12 @@ import {
   Bell,
   ChevronRight,
   Sun,
-  Moon
+  Moon,
+  Settings
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useDarkMode } from '../hooks/useDarkMode';
+import { useConfigStore } from '../store/configStore';
 
 const AppLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -33,6 +35,11 @@ const AppLayout = () => {
   const { user, logout, activeBranch, setActiveBranch } = useAuthStore();
   const navigate = useNavigate();
   const { isDarkMode, toggleDarkMode } = useDarkMode();
+  const { config, fetchConfig } = useConfigStore();
+
+  useEffect(() => {
+    fetchConfig();
+  }, []);
 
   const fetchBranches = async () => {
     try {
@@ -55,16 +62,20 @@ const AppLayout = () => {
   useEffect(() => {
     if (user?.role === 'admin') {
       fetchBranches();
-    } else if (activeBranch) {
-      fetchSingleBranch(activeBranch);
     }
-  }, [user, activeBranch]);
+  }, [user?.role]);
 
   useEffect(() => {
-    if (user?.role === 'admin' && !activeBranch) {
+    if (activeBranch && user?.role !== 'admin') {
+      fetchSingleBranch(activeBranch);
+    }
+  }, [activeBranch, user?.role]);
+
+  useEffect(() => {
+    if (user?.role === 'admin' && !activeBranch && branches.length > 0) {
       setShowBranchModal(true);
     }
-  }, [user, activeBranch]);
+  }, [user, activeBranch, branches]);
 
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'encargado'] },
@@ -76,6 +87,7 @@ const AppLayout = () => {
     { name: 'Presupuestos', path: '/quotes', icon: FileText, roles: ['admin', 'encargado', 'cajero'] },
     { name: 'Clientes', path: '/clients', icon: Users2, roles: ['admin', 'encargado', 'cajero'] },
     { name: 'Métricas', path: '/metrics', icon: PieChart, roles: ['admin', 'encargado'] },
+    { name: 'Configuración', path: '/config', icon: Settings, roles: ['admin'] },
   ].filter(item => item.roles.includes(user?.role));
 
   const handleLogout = () => {
@@ -88,16 +100,22 @@ const AppLayout = () => {
     ? (branches.find(b => b.id === activeBranch)?.name || 'Sin sucursal')
     : localBranchName;
 
+  const logoUrl = config.sidebar_logo_path ? `http://localhost:3000${config.sidebar_logo_path}` : null;
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-50 dark:bg-slate-900 flex flex-col md:flex-row transition-colors duration-200">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row transition-colors duration-200">
       {/* Mobile Header */}
-      <header className="md:hidden bg-white dark:bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between sticky top-0 z-50">
-        <h1 className="text-xl font-bold text-primary-500">Chopper POS</h1>
+      <header className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between sticky top-0 z-50">
+        {logoUrl ? (
+          <img src={logoUrl} alt="Logo" className="w-[140px] h-auto object-contain" />
+        ) : (
+          <h1 className="text-xl font-bold text-primary-500 dark:text-primary-400">Chopper POS</h1>
+        )}
         <div className="flex items-center space-x-2">
-          <button onClick={toggleDarkMode} className="p-2 text-gray-500 dark:text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-100 dark:bg-slate-700 rounded-full transition-colors">
+          <button onClick={toggleDarkMode} className="p-2 text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors">
             {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
-          <button onClick={() => setSidebarOpen(true)} className="p-2 text-gray-700 dark:text-slate-900 dark:text-slate-100">
+          <button onClick={() => setSidebarOpen(true)} className="p-2 text-slate-700 dark:text-slate-100">
             <Menu className="w-6 h-6" />
           </button>
         </div>
@@ -105,13 +123,17 @@ const AppLayout = () => {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-200 dark:border-slate-700 transition-transform duration-300 flex flex-col md:relative md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 flex flex-col md:relative md:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="p-6 flex items-center justify-between shrink-0">
-          <h1 className="text-2xl font-bold text-primary-500 hidden md:block">Chopper POS</h1>
-          <button className="md:hidden text-gray-500 dark:text-slate-600 dark:text-slate-400" onClick={() => setSidebarOpen(false)}>
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="w-[160px] h-auto object-contain hidden md:block" />
+          ) : (
+            <h1 className="text-2xl font-bold text-primary-500 dark:text-primary-400 hidden md:block">Chopper POS</h1>
+          )}
+          <button className="md:hidden text-slate-500 dark:text-slate-400" onClick={() => setSidebarOpen(false)}>
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -127,7 +149,7 @@ const AppLayout = () => {
                   `flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
                     isActive
                       ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/20'
-                      : 'text-gray-600 dark:text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-100 dark:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-900 dark:text-slate-100'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                   }`
                 }
               >
@@ -138,14 +160,14 @@ const AppLayout = () => {
           </nav>
         </div>
 
-        <div className="shrink-0 p-4 border-t border-gray-200 dark:border-slate-200 dark:border-slate-700 bg-gray-50 dark:bg-white dark:bg-slate-800">
+        <div className="shrink-0 p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
           <div className="flex items-center space-x-3 mb-4 px-2">
             <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center font-bold text-white shrink-0">
               {user?.name?.charAt(0)}
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-semibold text-gray-900 dark:text-slate-900 dark:text-slate-100 truncate">{user?.name}</p>
-              <p className="text-xs text-gray-500 dark:text-slate-600 dark:text-slate-400 capitalize">{user?.role}</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{user?.name}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{user?.role}</p>
             </div>
           </div>
           <button
@@ -168,15 +190,15 @@ const AppLayout = () => {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="hidden md:flex bg-white/50 dark:bg-white dark:bg-slate-800/50 backdrop-blur-md border-b border-gray-200 dark:border-slate-200 dark:border-slate-700 p-4 items-center justify-between sticky top-0 z-30">
+        <header className="hidden md:flex bg-white/50 dark:bg-slate-900/50 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-4 items-center justify-between sticky top-0 z-30">
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 dark:bg-slate-100 dark:bg-slate-700 rounded-full text-sm text-gray-700 dark:text-slate-700 dark:text-slate-300">
+            <div className="flex items-center space-x-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-sm text-slate-700 dark:text-slate-300">
               <MapPin className="w-4 h-4 text-primary-500" />
               <span className="font-medium">{activeBranchName}</span>
               {user?.role === 'admin' && (
                 <button 
                   onClick={() => setShowBranchModal(true)}
-                  className="ml-2 p-1 hover:bg-gray-200 dark:hover:bg-slate-200 dark:bg-slate-600 rounded-full text-primary-400 transition-colors"
+                  className="ml-2 p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-primary-400 transition-colors"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -187,14 +209,14 @@ const AppLayout = () => {
           <div className="flex items-center space-x-2">
             <button 
               onClick={toggleDarkMode}
-              className="p-2 text-gray-500 dark:text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-100 dark:bg-slate-700 rounded-full transition-colors"
+              className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
               title="Alternar tema"
             >
               {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
-            <button className="relative p-2 text-gray-500 dark:text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-100 dark:bg-slate-700 rounded-full transition-colors">
+            <button className="relative p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
               <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-100 dark:border-slate-800"></span>
+              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-900"></span>
             </button>
           </div>
         </header>
@@ -207,8 +229,8 @@ const AppLayout = () => {
       {/* Branch Selector Modal (Simple) */}
       {showBranchModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-white dark:bg-white dark:bg-slate-800 w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-200 dark:border-slate-700 p-6">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-slate-900 dark:text-slate-100 mb-4">Seleccionar Sucursal</h2>
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-4">Seleccionar Sucursal</h2>
             <div className="space-y-2">
               {branches.map((b) => (
                 <button
@@ -220,7 +242,7 @@ const AppLayout = () => {
                   className={`w-full text-left p-4 rounded-xl border transition-all ${
                     activeBranch === b.id
                       ? 'bg-primary-50 dark:bg-primary-600/20 border-primary-500 text-primary-700 dark:text-primary-100'
-                      : 'bg-gray-50 dark:bg-slate-100 dark:bg-slate-700 border-gray-200 dark:border-slate-300 dark:border-slate-600 text-gray-700 dark:text-slate-700 dark:text-slate-300 hover:border-gray-300 dark:hover:border-dark-600'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
                   <p className="font-semibold">{b.name}</p>
@@ -234,4 +256,5 @@ const AppLayout = () => {
     </div>
   );
 };
+
 export default AppLayout;

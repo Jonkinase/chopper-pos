@@ -2,7 +2,7 @@ import React from 'react';
 
 const Badge = ({ children, variant = 'default', className = '' }) => {
   const variants = {
-    default: 'bg-gray-100 text-gray-700 dark:bg-slate-100 dark:bg-slate-700 dark:text-slate-800 dark:text-slate-200',
+    default: 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-200',
     primary: 'bg-primary-50 text-primary-700 dark:bg-primary-900 dark:text-primary-300',
     success: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400',
     warning: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400',

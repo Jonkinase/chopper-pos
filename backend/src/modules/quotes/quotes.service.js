@@ -37,9 +37,9 @@ class QuotesService {
       JOIN branches b ON q.branch_id = b.id
       WHERE q.id = $1`;
     const itemsQuery = `
-      SELECT qi.*, p.name as product_name
+      SELECT qi.*, COALESCE(p.name, qi.custom_description) as product_name, p.type as product_type
       FROM quote_items qi
-      JOIN products p ON qi.product_id = p.id
+      LEFT JOIN products p ON qi.product_id = p.id
       WHERE qi.quote_id = $1`;
 
     const quoteRes = await db.query(quoteQuery, [id]);
@@ -68,9 +68,9 @@ class QuotesService {
 
       for (const item of items) {
         await client.query(`
-          INSERT INTO quote_items (quote_id, product_id, unit_type, quantity, unit_price_applied, price_type, subtotal)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [quoteId, item.producto_id, item.unit_type || 'unidades', item.cantidad, item.precio_unitario, item.tipo_precio, item.subtotal]
+          INSERT INTO quote_items (quote_id, product_id, custom_description, unit_type, quantity, unit_price_applied, price_type, subtotal)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [quoteId, item.producto_id || null, item.custom_description || null, item.unit_type || 'unidades', item.cantidad, item.precio_unitario, item.tipo_precio || 'menudeo', item.subtotal]
         );
       }
 
@@ -101,9 +101,9 @@ class QuotesService {
 
       for (const item of items) {
         await client.query(`
-          INSERT INTO quote_items (quote_id, product_id, unit_type, quantity, unit_price_applied, price_type, subtotal)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [id, item.producto_id, item.unit_type || 'unidades', item.cantidad, item.precio_unitario, item.tipo_precio, item.subtotal]
+          INSERT INTO quote_items (quote_id, product_id, custom_description, unit_type, quantity, unit_price_applied, price_type, subtotal)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [id, item.producto_id || null, item.custom_description || null, item.unit_type || 'unidades', item.cantidad, item.precio_unitario, item.tipo_precio || 'menudeo', item.subtotal]
         );
       }
 
@@ -142,6 +142,7 @@ class QuotesService {
       tipo_pago: tipo_pago || 'contado',
       items: quote.items.map(item => ({
         producto_id: item.product_id,
+        custom_description: item.custom_description,
         cantidad: item.quantity,
         precio_unitario: item.unit_price_applied,
         tipo_precio: item.price_type,

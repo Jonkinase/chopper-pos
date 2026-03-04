@@ -7,7 +7,10 @@ class SalesController {
         sucursal_id: req.query.sucursal_id || req.user.branch_id,
         fecha_desde: req.query.fecha_desde,
         fecha_hasta: req.query.fecha_hasta,
-        cliente_id: req.query.cliente_id
+        cliente_id: req.query.cliente_id,
+        tipo_pago: req.query.tipo_pago,
+        estado: req.query.estado,
+        search: req.query.search
       };
       const data = await salesService.getAll(filters);
       res.json({ success: true, data });

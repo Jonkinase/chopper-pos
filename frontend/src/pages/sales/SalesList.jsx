@@ -7,7 +7,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import Badge from '../../components/ui/Badge';
 import { formatCurrency } from '../../utils/formatters';
-import { ShoppingCart, Ban, FileText, Search, Plus } from 'lucide-react';
+import { ShoppingCart, Ban, FileText, Search, Plus, Filter, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Modal from '../../components/ui/Modal';
 
@@ -24,11 +24,28 @@ const SalesList = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [saleDetail, setSaleDetail] = useState(null);
 
+  // Filters state
+  const today = new Date().toISOString().split('T')[0];
+  const [fechaDesde, setFechaDesde] = useState(today);
+  const [fechaHasta, setFechaHasta] = useState(today);
+  const [search, setSearch] = useState('');
+  const [tipoPago, setTipoPago] = useState('');
+  const [estado, setEstado] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
   const fetchSales = async () => {
     if (!activeBranch) return;
     setIsLoading(true);
     try {
-      const { data } = await api.get(`/sales?sucursal_id=${activeBranch}`);
+      const params = new URLSearchParams({
+        sucursal_id: activeBranch,
+        fecha_desde: fechaDesde,
+        fecha_hasta: fechaHasta,
+        ...(search && { search }),
+        ...(tipoPago && { tipo_pago: tipoPago }),
+        ...(estado && { estado })
+      });
+      const { data } = await api.get(`/sales?${params.toString()}`);
       setSales(data.data);
     } catch (error) {
       toast.error('Error al cargar ventas');
@@ -38,8 +55,27 @@ const SalesList = () => {
   };
 
   useEffect(() => {
-    fetchSales();
-  }, [activeBranch]);
+    const delayDebounceFn = setTimeout(() => {
+      fetchSales();
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [activeBranch, fechaDesde, fechaHasta, search, tipoPago, estado]);
+
+  const handleClearFilters = () => {
+    setFechaDesde(today);
+    setFechaHasta(today);
+    setSearch('');
+    setTipoPago('');
+    setEstado('');
+  };
+
+  const activeFiltersCount = 
+    (search ? 1 : 0) + 
+    (tipoPago ? 1 : 0) + 
+    (estado ? 1 : 0) + 
+    (fechaDesde !== today ? 1 : 0) + 
+    (fechaHasta !== today ? 1 : 0);
 
   const handleCancelSale = async () => {
     if (!cancelReason.trim()) {
@@ -144,27 +180,117 @@ const SalesList = () => {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Historial de Ventas</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">Consulta las operaciones realizadas</p>
         </div>
-        <button
-          onClick={() => navigate('/sales/new')}
-          className="flex items-center space-x-2 bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-lg transition-colors font-medium"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Nueva Venta</span>
-        </button>
+        <div className="flex items-center space-x-2 w-full sm:w-auto">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`md:hidden flex-1 flex items-center justify-center space-x-2 px-4 py-2 rounded-lg border transition-colors ${showFilters || activeFiltersCount > 0 ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800 text-primary-600 dark:text-primary-400' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'}`}
+          >
+            <Filter className="w-4 h-4" />
+            <span>Filtros {activeFiltersCount > 0 && `(${activeFiltersCount})`}</span>
+          </button>
+          <button
+            onClick={() => navigate('/sales/new')}
+            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Nueva Venta</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Filters Panel */}
+      <div className={`${showFilters ? 'block' : 'hidden'} md:block bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4`}>
+        <div className="flex items-center justify-between md:hidden mb-2">
+          <h3 className="font-bold text-slate-900 dark:text-slate-100">Filtros de búsqueda</h3>
+          <button onClick={() => setShowFilters(false)} className="p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="md:col-span-2 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Buscar cliente o Nº venta..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <input
+              type="date"
+              value={fechaDesde}
+              onChange={(e) => setFechaDesde(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 outline-none"
+              title="Fecha Desde"
+            />
+          </div>
+
+          <div>
+            <input
+              type="date"
+              value={fechaHasta}
+              onChange={(e) => setFechaHasta(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 outline-none"
+              title="Fecha Hasta"
+            />
+          </div>
+
+          <div className="flex space-x-2">
+            <select
+              value={tipoPago}
+              onChange={(e) => setTipoPago(e.target.value)}
+              className="w-1/2 px-2 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 outline-none"
+            >
+              <option value="">Todo Pago</option>
+              <option value="contado">Contado</option>
+              <option value="cuenta_corriente">Cta. Corriente</option>
+            </select>
+            <select
+              value={estado}
+              onChange={(e) => setEstado(e.target.value)}
+              className="w-1/2 px-2 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 outline-none"
+            >
+              <option value="">Todo Estado</option>
+              <option value="completada">Completada</option>
+              <option value="anulada">Anulada</option>
+            </select>
+          </div>
+        </div>
+
+        {activeFiltersCount > 0 && (
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={handleClearFilters}
+              className="text-sm text-red-500 hover:text-red-600 font-medium transition-colors"
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-between items-center text-sm text-slate-600 dark:text-slate-400 px-1">
+        <span>Mostrando {sales.length} ventas</span>
       </div>
 
       {sales.length === 0 && !isLoading ? (
         <EmptyState
           icon={ShoppingCart}
-          title="No hay ventas registradas"
-          description="Aún no se han realizado ventas en esta sucursal."
+          title={activeFiltersCount > 0 ? "No se encontraron ventas" : "No hay ventas registradas"}
+          description={activeFiltersCount > 0 ? "Prueba cambiando los filtros de búsqueda o el rango de fechas." : "Aún no se han realizado ventas en esta sucursal."}
           action={
-            <button
-              onClick={() => navigate('/sales/new')}
-              className="mt-4 bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-lg"
-            >
-              Ir al POS
-            </button>
+            !activeFiltersCount && (
+              <button
+                onClick={() => navigate('/sales/new')}
+                className="mt-4 bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-lg"
+              >
+                Ir al POS
+              </button>
+            )
           }
         />
       ) : (

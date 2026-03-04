@@ -2,7 +2,7 @@ const db = require('../../config/db');
 
 class SalesService {
   async getAll(filters) {
-    const { sucursal_id, fecha_desde, fecha_hasta, cliente_id } = filters;
+    const { sucursal_id, fecha_desde, fecha_hasta, cliente_id, tipo_pago, estado, search } = filters;
     let query = `
       SELECT s.*, c.name as customer_name, b.name as branch_name, u.name as user_name
       FROM sales s
@@ -18,18 +18,33 @@ class SalesService {
     }
 
     if (fecha_desde) {
-      params.push(fecha_desde);
+      params.push(fecha_desde + ' 00:00:00');
       query += ` AND s.created_at >= $${params.length}`;
     }
 
     if (fecha_hasta) {
-      params.push(fecha_hasta);
+      params.push(fecha_hasta + ' 23:59:59');
       query += ` AND s.created_at <= $${params.length}`;
     }
 
     if (cliente_id) {
       params.push(cliente_id);
       query += ` AND s.customer_id = $${params.length}`;
+    }
+
+    if (tipo_pago) {
+      params.push(tipo_pago);
+      query += ` AND s.payment_method = $${params.length}`;
+    }
+
+    if (estado) {
+      params.push(estado);
+      query += ` AND s.status = $${params.length}`;
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      query += ` AND (c.name ILIKE $${params.length} OR s.id::text ILIKE $${params.length})`;
     }
 
     query += ' ORDER BY s.created_at DESC';
@@ -46,9 +61,11 @@ class SalesService {
       JOIN users u ON s.user_id = u.id
       WHERE s.id = $1`;
     const itemsQuery = `
-      SELECT si.*, p.name as product_name, p.unidad_display
+      SELECT si.*, 
+             COALESCE(p.name, si.custom_description) as product_name, 
+             COALESCE(p.unidad_display, si.unit_type::text) as unidad_display
       FROM sale_items si
-      JOIN products p ON si.product_id = p.id
+      LEFT JOIN products p ON si.product_id = p.id
       WHERE si.sale_id = $1`;
 
     const saleRes = await db.query(saleQuery, [id]);
@@ -79,21 +96,23 @@ class SalesService {
       for (const item of items) {
         const { producto_id, cantidad } = item;
 
-        // Validar que el producto exista en la sucursal y tenga stock
-        const invQuery = `
-          SELECT i.*, p.type as product_type 
-          FROM inventory i 
-          JOIN products p ON i.product_id = p.id
-          WHERE i.product_id = $1 AND i.branch_id = $2 AND i.deleted_at IS NULL`;
-        const invRes = await client.query(invQuery, [producto_id, sucursal_id]);
-        
-        if (invRes.rows.length === 0) {
-          throw { status: 400, message: `El producto ${producto_id} no está disponible en esta sucursal` };
-        }
+        if (producto_id) {
+          // Validar que el producto exista en la sucursal y tenga stock
+          const invQuery = `
+            SELECT i.*, p.type as product_type 
+            FROM inventory i 
+            JOIN products p ON i.product_id = p.id
+            WHERE i.product_id = $1 AND i.branch_id = $2 AND i.deleted_at IS NULL`;
+          const invRes = await client.query(invQuery, [producto_id, sucursal_id]);
+          
+          if (invRes.rows.length === 0) {
+            throw { status: 400, message: `El producto ${producto_id} no está disponible en esta sucursal` };
+          }
 
-        const inventory = invRes.rows[0];
-        if (parseFloat(inventory.stock_actual) < parseFloat(cantidad)) {
-          throw { status: 400, message: `Stock insuficiente para el producto ${producto_id}` };
+          const inventory = invRes.rows[0];
+          if (parseFloat(inventory.stock_actual) < parseFloat(cantidad)) {
+            throw { status: 400, message: `Stock insuficiente para el producto ${producto_id}` };
+          }
         }
 
         total += parseFloat(item.subtotal);
@@ -111,35 +130,41 @@ class SalesService {
 
       // 4. Insertar items, descontar stock y registrar movimientos
       for (const item of items) {
-        const { producto_id, cantidad, precio_unitario, tipo_precio, subtotal } = item;
+        const { producto_id, cantidad, precio_unitario, tipo_precio, subtotal, custom_description } = item;
 
-        // Determinar unit_type basado en el producto (esto podría venir del frontend o buscarse)
-        const prodRes = await client.query('SELECT type FROM products WHERE id = $1', [producto_id]);
-        const pType = prodRes.rows[0].type;
-        const unitType = pType === 'liquido' ? 'litros' : (pType === 'alimento' ? 'kilogramos' : 'unidades');
+        let unitType = item.unit_type || 'unidades';
+        let pType = 'seco';
+        if (producto_id) {
+          // Determinar unit_type basado en el producto (esto podría venir del frontend o buscarse)
+          const prodRes = await client.query('SELECT type FROM products WHERE id = $1', [producto_id]);
+          pType = prodRes.rows[0].type;
+          unitType = pType === 'liquido' ? 'litros' : (pType === 'alimento' ? 'kilogramos' : 'unidades');
+        }
 
         // Insertar item de venta
         await client.query(`
-          INSERT INTO sale_items (sale_id, product_id, unit_type, quantity, unit_price_applied, price_type, subtotal)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [saleId, producto_id, unitType, cantidad, precio_unitario, tipo_precio, subtotal]
+          INSERT INTO sale_items (sale_id, product_id, custom_description, unit_type, quantity, unit_price_applied, price_type, subtotal)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [saleId, producto_id || null, custom_description || null, unitType, cantidad, precio_unitario, tipo_precio || 'menudeo', subtotal]
         );
 
-        // Descontar stock
-        const updateStockQuery = `
-          UPDATE inventory 
-          SET stock_actual = stock_actual - $1, updated_at = CURRENT_TIMESTAMP
-          WHERE product_id = $2 AND branch_id = $3
-          RETURNING id`;
-        const invUpdateRes = await client.query(updateStockQuery, [cantidad, producto_id, sucursal_id]);
-        const inventoryId = invUpdateRes.rows[0].id;
+        if (producto_id) {
+          // Descontar stock
+          const updateStockQuery = `
+            UPDATE inventory 
+            SET stock_actual = stock_actual - $1, updated_at = CURRENT_TIMESTAMP
+            WHERE product_id = $2 AND branch_id = $3
+            RETURNING id`;
+          const invUpdateRes = await client.query(updateStockQuery, [cantidad, producto_id, sucursal_id]);
+          const inventoryId = invUpdateRes.rows[0].id;
 
-        // Registrar movimiento de inventario
-        await client.query(`
-          INSERT INTO inventory_movements (inventory_id, user_id, type, quantity, reason)
-          VALUES ($1, $2, 'venta', $3, $4)`,
-          [inventoryId, userId, -cantidad, `Venta #${saleId}`]
-        );
+          // Registrar movimiento de inventario
+          await client.query(`
+            INSERT INTO inventory_movements (inventory_id, user_id, type, quantity, reason)
+            VALUES ($1, $2, 'venta', $3, $4)`,
+            [inventoryId, userId, -cantidad, `Venta #${saleId}`]
+          );
+        }
       }
 
       // 5. Si es cuenta corriente, actualizar deuda y registrar movimiento de cuenta
@@ -195,19 +220,21 @@ class SalesService {
       // 3. Revertir stock y registrar movimientos
       const itemsRes = await client.query('SELECT * FROM sale_items WHERE sale_id = $1', [id]);
       for (const item of itemsRes.rows) {
-        const updateStockQuery = `
-          UPDATE inventory 
-          SET stock_actual = stock_actual + $1, updated_at = CURRENT_TIMESTAMP
-          WHERE product_id = $2 AND branch_id = $3
-          RETURNING id`;
-        const invUpdateRes = await client.query(updateStockQuery, [item.quantity, item.product_id, sale.branch_id]);
-        
-        if (invUpdateRes.rows.length > 0) {
-            await client.query(`
-              INSERT INTO inventory_movements (inventory_id, user_id, type, quantity, reason)
-              VALUES ($1, $2, 'devolucion', $3, $4)`,
-              [invUpdateRes.rows[0].id, userId, item.quantity, `Anulación Venta #${id}: ${reason || 'Sin motivo'}`]
-            );
+        if (item.product_id) {
+          const updateStockQuery = `
+            UPDATE inventory 
+            SET stock_actual = stock_actual + $1, updated_at = CURRENT_TIMESTAMP
+            WHERE product_id = $2 AND branch_id = $3
+            RETURNING id`;
+          const invUpdateRes = await client.query(updateStockQuery, [item.quantity, item.product_id, sale.branch_id]);
+          
+          if (invUpdateRes.rows.length > 0) {
+              await client.query(`
+                INSERT INTO inventory_movements (inventory_id, user_id, type, quantity, reason)
+                VALUES ($1, $2, 'devolucion', $3, $4)`,
+                [invUpdateRes.rows[0].id, userId, item.quantity, `Anulación Venta #${id}: ${reason || 'Sin motivo'}`]
+              );
+          }
         }
       }
 

@@ -75,7 +75,7 @@ const UsersList = () => {
     { header: 'Nombre', accessorKey: 'name', className: 'font-semibold text-slate-900 dark:text-slate-100' },
     { header: 'Email', accessorKey: 'email' },
     { header: 'Rol', cell: (row) => <RoleBadge role={row.role} /> },
-    { header: 'Sucursal ID', cell: (row) => row.branch_id ? <span className="text-xs text-slate-600 dark:text-slate-400">{row.branch_id.substring(0,8)}...</span> : <span className="text-xs text-slate-900 dark:text-slate-1000">- Global -</span> },
+    { header: 'Sucursal ID', cell: (row) => row.branch_id ? <span className="text-xs text-slate-600 dark:text-slate-400">{row.branch_id.substring(0,8)}...</span> : <span className="text-xs text-slate-900 dark:text-slate-100">- Global -</span> },
     {
       header: 'Acciones',
       cell: (row) => (

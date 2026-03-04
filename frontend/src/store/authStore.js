@@ -8,17 +8,24 @@ export const useAuthStore = create(
       token: null,
       refreshToken: null,
       isAuthenticated: false,
-      activeBranch: null,
+      activeBranch: localStorage.getItem('chopper-active-branch') || null,
 
       login: (userData, token, refreshToken) => {
+        const initialBranch = userData.role !== 'admin' 
+          ? userData.branch_id 
+          : (localStorage.getItem('chopper-active-branch') || null);
+        
         set({
           user: userData,
           token,
           refreshToken,
           isAuthenticated: true,
-          // If admin and no active branch, it remains null until selected
-          activeBranch: userData.role !== 'admin' ? userData.branch_id : null,
+          activeBranch: initialBranch,
         });
+
+        if (initialBranch) {
+          localStorage.setItem('chopper-active-branch', initialBranch);
+        }
       },
 
       logout: () => {
@@ -30,10 +37,12 @@ export const useAuthStore = create(
           activeBranch: null,
         });
         localStorage.removeItem('auth-storage');
+        localStorage.removeItem('chopper-active-branch');
       },
 
       setActiveBranch: (branchId) => {
         set({ activeBranch: branchId });
+        localStorage.setItem('chopper-active-branch', branchId);
       },
 
       setToken: (token) => set({ token }),

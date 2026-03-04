@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from '../layouts/AppLayout';
 import LoginPage from '../pages/auth/LoginPage';
+import ConfigPage from '../pages/config/ConfigPage';
 import ProtectedRoute from './ProtectedRoute';
 import { Toaster } from 'react-hot-toast';
 
@@ -90,6 +91,12 @@ const AppRouter = () => {
               </ProtectedRoute>
             } />
           </Route>
+
+          <Route path="config" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <ConfigPage />
+            </ProtectedRoute>
+          } />
           
           {/* Catch All 404 */}
           <Route path="*" element={<NotFound />} />
