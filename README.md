@@ -95,7 +95,7 @@ Aquí tienes la explicación de las variables requeridas en el archivo `backend/
 | `DB_USER` | Usuario de PostgreSQL | `postgres` |
 | `DB_PASSWORD` | Contraseña del usuario PostgreSQL | *Tu contraseña local* |
 | `DB_NAME` | Nombre de la base de datos | `chopper_pos_dev` |
-| `JWT_ACCESS_SECRET` | Llave secreta para firmar tokens de acceso | *Cadena alfanumérica segura* |
+| `JWT_SECRET` | Llave secreta para firmar tokens de acceso | *Cadena alfanumérica segura* |
 | `JWT_ACCESS_EXPIRES_IN` | Tiempo de expiración del token de acceso | `8h` |
 | `JWT_REFRESH_SECRET` | Llave secreta para firmar tokens de refresco | *Cadena alfanumérica segura* |
 | `JWT_REFRESH_EXPIRES_IN`| Tiempo de expiración del token de refresco| `7d` |

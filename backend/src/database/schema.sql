@@ -93,57 +93,10 @@ CREATE TABLE customer_accounts (
 );
 
 -- ------------------------------------------------------------------------
--- VENTAS (Sales)
--- ------------------------------------------------------------------------
-CREATE TYPE sale_status AS ENUM ('completada', 'anulada');
-CREATE TYPE payment_method AS ENUM ('contado', 'cuenta_corriente', 'tarjeta', 'transferencia');
-
-CREATE TABLE sales (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    branch_id UUID NOT NULL REFERENCES branches(id),
-    user_id UUID NOT NULL REFERENCES users(id),
-    customer_id UUID REFERENCES customers(id),
-    quote_id UUID REFERENCES quotes(id),
-    status sale_status NOT NULL DEFAULT 'completada',
-    payment_method payment_method NOT NULL,
-    total DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE
-);
-
--- ------------------------------------------------------------------------
--- ITEMS DE VENTA (Sale Items)
+-- TIPOS COMPARTIDOS (Shared Types)
 -- ------------------------------------------------------------------------
 CREATE TYPE price_type AS ENUM ('menudeo', 'mayoreo');
 CREATE TYPE unit_type AS ENUM ('litros', 'unidades', 'kilogramos');
-
-CREATE TABLE sale_items (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    sale_id UUID NOT NULL REFERENCES sales(id),
-    product_id UUID NOT NULL REFERENCES products(id),
-    unit_type unit_type NOT NULL,
-    quantity DECIMAL(10, 3) NOT NULL,
-    unit_price_applied DECIMAL(12, 2) NOT NULL,
-    price_type price_type NOT NULL,
-    subtotal DECIMAL(12, 2) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- ------------------------------------------------------------------------
--- MOVIMIENTOS DE CUENTA (Account Movements)
--- ------------------------------------------------------------------------
-CREATE TYPE movement_type AS ENUM ('cargo', 'abono');
-
-CREATE TABLE account_movements (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    account_id UUID NOT NULL REFERENCES customer_accounts(id),
-    sale_id UUID REFERENCES sales(id), -- En caso de que el cargo provenga de una venta
-    type movement_type NOT NULL,
-    amount DECIMAL(12, 2) NOT NULL,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
 
 -- ------------------------------------------------------------------------
 -- PRESUPUESTOS (Quotes)
@@ -171,6 +124,56 @@ CREATE TABLE quote_items (
     unit_price_applied DECIMAL(12, 2) NOT NULL,
     price_type price_type NOT NULL,
     subtotal DECIMAL(12, 2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ------------------------------------------------------------------------
+-- VENTAS (Sales)
+-- ------------------------------------------------------------------------
+CREATE TYPE sale_status AS ENUM ('completada', 'anulada');
+CREATE TYPE payment_method AS ENUM ('contado', 'cuenta_corriente', 'tarjeta', 'transferencia');
+
+CREATE TABLE sales (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    branch_id UUID NOT NULL REFERENCES branches(id),
+    user_id UUID NOT NULL REFERENCES users(id),
+    customer_id UUID REFERENCES customers(id),
+    quote_id UUID REFERENCES quotes(id),
+    status sale_status NOT NULL DEFAULT 'completada',
+    payment_method payment_method NOT NULL,
+    total DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- ------------------------------------------------------------------------
+-- ITEMS DE VENTA (Sale Items)
+-- ------------------------------------------------------------------------
+CREATE TABLE sale_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sale_id UUID NOT NULL REFERENCES sales(id),
+    product_id UUID NOT NULL REFERENCES products(id),
+    unit_type unit_type NOT NULL,
+    quantity DECIMAL(10, 3) NOT NULL,
+    unit_price_applied DECIMAL(12, 2) NOT NULL,
+    price_type price_type NOT NULL,
+    subtotal DECIMAL(12, 2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ------------------------------------------------------------------------
+-- MOVIMIENTOS DE CUENTA (Account Movements)
+-- ------------------------------------------------------------------------
+CREATE TYPE movement_type AS ENUM ('cargo', 'abono');
+
+CREATE TABLE account_movements (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    account_id UUID NOT NULL REFERENCES customer_accounts(id),
+    sale_id UUID REFERENCES sales(id), -- En caso de que el cargo provenga de una venta
+    type movement_type NOT NULL,
+    amount DECIMAL(12, 2) NOT NULL,
+    description TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
