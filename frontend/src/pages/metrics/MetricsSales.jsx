@@ -45,12 +45,17 @@ const MetricsSales = () => {
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
+      // Para PieChart, el label suele venir en payload[0].name si label no está definido
+      const displayLabel = label || payload[0].name || payload[0].payload.label;
+      
       return (
-        <div className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 p-3 rounded-xl shadow-xl">
-          <p className="text-slate-900 dark:text-slate-100 font-bold mb-2">{label}</p>
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl shadow-xl border-l-4" style={{ borderLeftColor: payload[0].color || payload[0].fill }}>
+          <p className="text-slate-900 dark:text-slate-100 font-bold mb-1 capitalize">
+            {typeof displayLabel === 'string' ? displayLabel.replace('_', ' ') : displayLabel}
+          </p>
           {payload.map((entry, index) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: <span className="font-bold">{formatCurrency(entry.value)}</span>
+            <p key={index} className="text-sm text-slate-600 dark:text-slate-400">
+              <span className="font-medium">{entry.name}:</span> <span className="font-bold text-slate-900 dark:text-slate-100">{entry.name === 'Transacciones' ? entry.value : formatCurrency(entry.value)}</span>
             </p>
           ))}
         </div>
@@ -108,7 +113,7 @@ const MetricsSales = () => {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={{ backgroundColor: '#1a1a1a', borderColor: '#333' }} />
+                      <Tooltip content={<CustomTooltip />} />
                       <Legend verticalAlign="bottom" height={36} formatter={(val) => <span className="text-slate-800 dark:text-slate-200 capitalize">{val.replace('_', ' ')}</span>} />
                     </PieChart>
                   </ResponsiveContainer>
@@ -127,7 +132,7 @@ const MetricsSales = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#2d2d2d" vertical={false} />
                   <XAxis dataKey="label" stroke="#888" fontSize={12} tickFormatter={(val) => `${val}hs`} />
                   <YAxis stroke="#888" fontSize={12} allowDecimals={false} />
-                  <Tooltip cursor={{fill: '#2d2d2d'}} contentStyle={{ backgroundColor: '#1a1a1a', borderColor: '#333' }} formatter={(val) => [val, 'Transacciones']} labelFormatter={(val) => `Hora: ${val}:00`} />
+                  <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} content={<CustomTooltip />} />
                   <Bar dataKey="value" name="Transacciones" fill="#10b981" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

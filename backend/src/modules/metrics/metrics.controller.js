@@ -27,8 +27,18 @@ class MetricsController {
   async getSales(req, res, next) {
     try {
       const sucursalId = this._validateBranch(req);
-      const { fecha_desde, fecha_hasta } = req.query;
-      const data = await metricsService.getSalesMetrics(sucursalId, fecha_desde || new Date(new Date().setDate(new Date().getDate() - 30)), fecha_hasta || new Date());
+      const { periodo, fecha_desde, fecha_hasta } = req.query;
+      
+      let from = fecha_desde;
+      let to = fecha_hasta;
+
+      if (!from || !to) {
+        const dates = metricsService.getPeriodDates(periodo || 'mes');
+        from = dates.start;
+        to = dates.now;
+      }
+
+      const data = await metricsService.getSalesMetrics(sucursalId, from, to);
       res.json({ success: true, data });
     } catch (err) {
       next(err);
@@ -38,8 +48,18 @@ class MetricsController {
   async getProducts(req, res, next) {
     try {
       const sucursalId = this._validateBranch(req);
-      const { fecha_desde, fecha_hasta } = req.query;
-      const data = await metricsService.getProductMetrics(sucursalId, fecha_desde || new Date(new Date().setDate(new Date().getDate() - 30)), fecha_hasta || new Date());
+      const { periodo, fecha_desde, fecha_hasta } = req.query;
+
+      let from = fecha_desde;
+      let to = fecha_hasta;
+
+      if (!from || !to) {
+        const dates = metricsService.getPeriodDates(periodo || 'mes');
+        from = dates.start;
+        to = dates.now;
+      }
+
+      const data = await metricsService.getProductMetrics(sucursalId, from, to);
       res.json({ success: true, data });
     } catch (err) {
       next(err);
@@ -49,8 +69,18 @@ class MetricsController {
   async getClients(req, res, next) {
     try {
       const sucursalId = this._validateBranch(req);
-      const { fecha_desde, fecha_hasta } = req.query;
-      const data = await metricsService.getClientMetrics(sucursalId, fecha_desde || new Date(new Date().setDate(new Date().getDate() - 30)), fecha_hasta || new Date());
+      const { periodo, fecha_desde, fecha_hasta } = req.query;
+
+      let from = fecha_desde;
+      let to = fecha_hasta;
+
+      if (!from || !to) {
+        const dates = metricsService.getPeriodDates(periodo || 'mes');
+        from = dates.start;
+        to = dates.now;
+      }
+
+      const data = await metricsService.getClientMetrics(sucursalId, from, to);
       res.json({ success: true, data });
     } catch (err) {
       next(err);

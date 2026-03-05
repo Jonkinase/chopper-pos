@@ -21,3 +21,6 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Mock Data Scripts
+backend/scripts/

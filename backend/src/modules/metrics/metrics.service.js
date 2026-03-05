@@ -137,9 +137,9 @@ class MetricsService {
     const byPayment = await db.query(byPaymentQuery, params);
 
     return {
-      sales_by_day: byDay.rows,
-      sales_by_hour: byHour.rows,
-      sales_by_payment: byPayment.rows
+      sales_by_day: byDay.rows.map(r => ({ ...r, value: parseFloat(r.value) })),
+      sales_by_hour: byHour.rows.map(r => ({ ...r, value: parseInt(r.value) })),
+      sales_by_payment: byPayment.rows.map(r => ({ ...r, value: parseFloat(r.value) }))
     };
   }
 
