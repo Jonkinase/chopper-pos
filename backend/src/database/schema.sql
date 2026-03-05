@@ -118,7 +118,8 @@ CREATE TABLE quotes (
 CREATE TABLE quote_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     quote_id UUID NOT NULL REFERENCES quotes(id),
-    product_id UUID NOT NULL REFERENCES products(id),
+    product_id UUID REFERENCES products(id),
+    custom_description TEXT,
     unit_type unit_type NOT NULL,
     quantity DECIMAL(10, 3) NOT NULL,
     unit_price_applied DECIMAL(12, 2) NOT NULL,
@@ -153,7 +154,8 @@ CREATE TABLE sales (
 CREATE TABLE sale_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     sale_id UUID NOT NULL REFERENCES sales(id),
-    product_id UUID NOT NULL REFERENCES products(id),
+    product_id UUID REFERENCES products(id),
+    custom_description TEXT,
     unit_type unit_type NOT NULL,
     quantity DECIMAL(10, 3) NOT NULL,
     unit_price_applied DECIMAL(12, 2) NOT NULL,
