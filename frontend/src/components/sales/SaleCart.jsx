@@ -38,7 +38,7 @@ const SaleCart = ({
       try {
         const [prodRes, clientRes] = await Promise.all([
           api.get(`/products?sucursal_id=${activeBranch}`),
-          api.get(`/clients`)
+          api.get(`/clients?branch_id=${activeBranch}`)
         ]);
         setProducts(prodRes.data.data);
         setFilteredProducts(prodRes.data.data);

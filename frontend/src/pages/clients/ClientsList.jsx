@@ -9,11 +9,13 @@ import { formatCurrency } from '../../utils/formatters';
 import { Users2, Plus, Edit2, Search, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../store/authStore';
 
 const ClientsList = () => {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const { activeBranch } = useAuthStore();
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
@@ -22,7 +24,7 @@ const ClientsList = () => {
   const fetchClients = async () => {
     setIsLoading(true);
     try {
-      const { data } = await api.get(`/clients?search=${search}`);
+      const { data } = await api.get(`/clients?search=${search}&branch_id=${activeBranch}`);
       setClients(data.data);
     } catch (error) {
       toast.error('Error al cargar clientes');
@@ -34,7 +36,7 @@ const ClientsList = () => {
   useEffect(() => {
     const timer = setTimeout(fetchClients, 300);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, activeBranch]);
 
   const handleSave = async (formData) => {
     try {
@@ -45,11 +47,15 @@ const ClientsList = () => {
             email: formData.email,
             phone: formData.phone,
             address: formData.address,
-          })
+          }),
+          branch_id: activeBranch
         });
         toast.success('Cliente actualizado');
       } else {
-        await api.post('/clients', formData);
+        await api.post('/clients', {
+          ...formData,
+          branch_id: activeBranch
+        });
         toast.success('Cliente creado');
       }
       setIsFormOpen(false);

@@ -1,10 +1,7 @@
 const db = require('../../config/db');
 
 class AccountsService {
-  async getAll(sucursalId) {
-    // Nota: El sistema registra clientes por sucursal en contact_info (JSON), 
-    // pero para listar cuentas se puede filtrar por los clientes que operaron en esa sucursal.
-    // Para simplificar según el prompt, listamos clientes y su saldo actual.
+  async getAll(branchId) {
     let query = `
       SELECT ca.id as account_id, c.id as customer_id, c.name as customer_name, ca.current_balance, ca.updated_at
       FROM customer_accounts ca
@@ -12,10 +9,9 @@ class AccountsService {
       WHERE c.deleted_at IS NULL`;
     const params = [];
 
-    if (sucursalId) {
-      // Filtrar clientes que pertenezcan o hayan tenido actividad en la sucursal (simplificado)
-      query += ` AND c.contact_info->>'sucursal_id' = $1`;
-      params.push(sucursalId);
+    if (branchId) {
+      query += ` AND c.branch_id = $1`;
+      params.push(branchId);
     }
 
     query += ' ORDER BY ca.current_balance DESC, c.name ASC';
@@ -23,13 +19,20 @@ class AccountsService {
     return rows;
   }
 
-  async getDetail(customerId) {
-    const query = `
+  async getDetail(customerId, branchId) {
+    let query = `
       SELECT ca.*, c.name as customer_name, c.contact_info
       FROM customer_accounts ca
       JOIN customers c ON ca.customer_id = c.id
       WHERE c.id = $1 AND c.deleted_at IS NULL`;
-    const { rows } = await db.query(query, [customerId]);
+    const params = [customerId];
+
+    if (branchId) {
+      params.push(branchId);
+      query += ` AND c.branch_id = $2`;
+    }
+
+    const { rows } = await db.query(query, params);
     if (rows.length === 0) throw { status: 404, message: 'Cuenta no encontrada' };
 
     const movements = await this.getMovements(customerId, 50, 0);
@@ -40,16 +43,27 @@ class AccountsService {
     };
   }
 
-  async registerPayment(customerId, data, userId) {
+  async registerPayment(customerId, data, userId, branchId) {
     const { monto, metodo_pago, observaciones } = data;
     
     const client = await db.connect();
     try {
       await client.query('BEGIN');
 
-      // 1. Obtener cuenta
-      const accountQuery = 'SELECT id, current_balance FROM customer_accounts WHERE customer_id = $1';
-      const accountRes = await client.query(accountQuery, [customerId]);
+      // 1. Obtener cuenta validando sucursal
+      let accountQuery = `
+        SELECT ca.id, ca.current_balance 
+        FROM customer_accounts ca
+        JOIN customers c ON ca.customer_id = c.id
+        WHERE ca.customer_id = $1`;
+      const params = [customerId];
+      
+      if (branchId) {
+        params.push(branchId);
+        accountQuery += ` AND c.branch_id = $2`;
+      }
+
+      const accountRes = await client.query(accountQuery, params);
       if (accountRes.rows.length === 0) throw { status: 404, message: 'Cuenta no encontrada' };
       
       const account = accountRes.rows[0];

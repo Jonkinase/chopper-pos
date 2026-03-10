@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import FormField from '../../components/ui/FormField';
+import { useAuthStore } from '../../store/authStore';
 
 // --- PAYMENT MODAL COMPONENT ---
 const paymentSchema = z.object({
@@ -20,6 +21,7 @@ const paymentSchema = z.object({
 
 const PaymentModal = ({ customerId, currentBalance, isOpen, onClose, onSuccess }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const { activeBranch } = useAuthStore();
   const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm({
     resolver: zodResolver(paymentSchema),
     defaultValues: { monto: '', metodo_pago: 'efectivo', observaciones: '' }
@@ -31,7 +33,7 @@ const PaymentModal = ({ customerId, currentBalance, isOpen, onClose, onSuccess }
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
-      await api.post(`/accounts/${customerId}/payment`, data);
+      await api.post(`/accounts/${customerId}/payment`, { ...data, branch_id: activeBranch });
       toast.success('Pago registrado correctamente');
       onSuccess();
     } catch (err) {
@@ -106,10 +108,11 @@ const AccountDetail = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const { activeBranch } = useAuthStore();
 
   const fetchDetail = async () => {
     try {
-      const res = await api.get(`/accounts/${id}`);
+      const res = await api.get(`/accounts/${id}?branch_id=${activeBranch}`);
       setData(res.data.data);
     } catch (error) {
       toast.error('Error al cargar la cuenta corriente');

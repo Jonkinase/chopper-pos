@@ -73,18 +73,20 @@ class MetricsService {
       WHERE deleted_at IS NULL AND stock_actual <= 10 ${isAll ? '' : 'AND branch_id = $1'}`;
     
     const accountsBalanceQuery = `
-      SELECT COALESCE(SUM(current_balance), 0) FROM customer_accounts 
-      WHERE current_balance > 0`;
+      SELECT COALESCE(SUM(ca.current_balance), 0) 
+      FROM customer_accounts ca
+      JOIN customers c ON ca.customer_id = c.id
+      WHERE ca.current_balance > 0 ${isAll ? '' : 'AND c.branch_id = $1'}`;
 
     const newClientsQuery = `
       SELECT COUNT(*) FROM customers 
-      WHERE created_at >= $1 AND created_at <= $2 AND deleted_at IS NULL`;
+      WHERE created_at >= $1 AND created_at <= $2 AND deleted_at IS NULL ${isAll ? '' : 'AND branch_id = $3'}`;
 
     const currentRes = await db.query(currentStatsQuery, params);
     const prevRes = await db.query(prevStatsQuery, prevParams);
     const lowStockRes = await db.query(lowStockQuery, isAll ? [] : [sucursalId]);
-    const balanceRes = await db.query(accountsBalanceQuery);
-    const newClientsRes = await db.query(newClientsQuery, [start, now]);
+    const balanceRes = await db.query(accountsBalanceQuery, isAll ? [] : [sucursalId]);
+    const newClientsRes = await db.query(newClientsQuery, isAll ? [start, now] : [start, now, sucursalId]);
 
     const current = currentRes.rows[0];
     const prevAmount = parseFloat(prevRes.rows[0].total_amount);
@@ -210,12 +212,12 @@ class MetricsService {
       SELECT c.name as label, ca.current_balance as value
       FROM customer_accounts ca
       JOIN customers c ON ca.customer_id = c.id
-      WHERE ca.current_balance > 0
+      WHERE ca.current_balance > 0 ${isAll ? '' : 'AND c.branch_id = $3'}
       ORDER BY value DESC
       LIMIT 10`;
 
     const topClients = await db.query(topClientsQuery, params);
-    const topDebt = await db.query(topDebtQuery);
+    const topDebt = await db.query(topDebtQuery, params);
 
     return {
       top_clients_spending: topClients.rows,

@@ -59,6 +59,17 @@ class QuotesService {
     try {
       await client.query('BEGIN');
 
+      // Validar cliente si se proporcionó uno
+      if (cliente_id) {
+        const customerCheck = await client.query(
+          'SELECT id FROM customers WHERE id = $1 AND branch_id = $2 AND deleted_at IS NULL',
+          [cliente_id, sucursal_id]
+        );
+        if (customerCheck.rows.length === 0) {
+          throw { status: 400, message: 'El cliente no pertenece a esta sucursal' };
+        }
+      }
+
       const quoteQuery = `
         INSERT INTO quotes (branch_id, user_id, customer_id, total, status)
         VALUES ($1, $2, $3, $4, 'borrador')
@@ -91,9 +102,24 @@ class QuotesService {
     try {
       await client.query('BEGIN');
 
-      const check = await client.query('SELECT status FROM quotes WHERE id = $1', [id]);
+      const check = await client.query('SELECT status, branch_id FROM quotes WHERE id = $1', [id]);
+      if (check.rows.length === 0) {
+        throw { status: 404, message: 'Presupuesto no encontrado' };
+      }
       if (check.rows[0].status !== 'borrador') {
         throw { status: 400, message: 'Solo se pueden editar presupuestos en estado borrador' };
+      }
+      const branchId = check.rows[0].branch_id;
+
+      // Validar cliente si se proporcionó uno
+      if (cliente_id) {
+        const customerCheck = await client.query(
+          'SELECT id FROM customers WHERE id = $1 AND branch_id = $2 AND deleted_at IS NULL',
+          [cliente_id, branchId]
+        );
+        if (customerCheck.rows.length === 0) {
+          throw { status: 400, message: 'El cliente no pertenece a esta sucursal' };
+        }
       }
 
       await client.query('UPDATE quotes SET total = $1, customer_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3', [total, cliente_id, id]);

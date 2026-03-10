@@ -85,9 +85,19 @@ class SalesService {
     try {
       await client.query('BEGIN');
 
-      // 1. Validar cliente si es cuenta corriente
+      // 1. Validar cliente si es cuenta corriente o si se proporcionó un cliente
       if (tipo_pago === 'cuenta_corriente' && !cliente_id) {
         throw { status: 400, message: 'cliente_id es obligatorio para ventas a cuenta corriente' };
+      }
+
+      if (cliente_id) {
+        const customerCheck = await client.query(
+          'SELECT id FROM customers WHERE id = $1 AND branch_id = $2 AND deleted_at IS NULL',
+          [cliente_id, sucursal_id]
+        );
+        if (customerCheck.rows.length === 0) {
+          throw { status: 400, message: 'El cliente no pertenece a esta sucursal' };
+        }
       }
 
       let total = 0;
