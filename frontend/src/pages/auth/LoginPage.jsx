@@ -59,7 +59,7 @@ const LoginPage = () => {
               className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 border ${
                 errors.email ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'
               } rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all`}
-              placeholder="admin@chopper.com"
+              placeholder="Ingresá tu email"
             />
             {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
           </div>
@@ -72,7 +72,7 @@ const LoginPage = () => {
               className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 border ${
                 errors.password ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'
               } rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all`}
-              placeholder="••••••••"
+              placeholder="Ingresá tu contraseña"
             />
             {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
           </div>
