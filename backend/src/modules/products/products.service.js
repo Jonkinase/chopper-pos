@@ -25,7 +25,7 @@ class ProductsService {
       stock_actual, description
     } = data;
 
-    const client = await db.pool.connect();
+    const client = await db.connect();
     try {
       await client.query('BEGIN');
 
@@ -72,7 +72,7 @@ class ProductsService {
       cantidad_minima_mayoreo, sucursal_id 
     } = data;
 
-    const client = await db.pool.connect();
+    const client = await db.connect();
     try {
       await client.query('BEGIN');
 

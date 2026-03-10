@@ -55,7 +55,7 @@ class QuotesService {
   async create(quoteData, userId) {
     const { sucursal_id, cliente_id, items, total } = quoteData;
 
-    const client = await db.pool.connect();
+    const client = await db.connect();
     try {
       await client.query('BEGIN');
 
@@ -87,7 +87,7 @@ class QuotesService {
   async update(id, quoteData) {
     const { items, total, cliente_id } = quoteData;
     
-    const client = await db.pool.connect();
+    const client = await db.connect();
     try {
       await client.query('BEGIN');
 

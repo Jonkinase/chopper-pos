@@ -81,7 +81,7 @@ class SalesService {
   async create(saleData, userId) {
     const { sucursal_id, cliente_id, quote_id, tipo_pago, items, observaciones } = saleData;
 
-    const client = await db.pool.connect();
+    const client = await db.connect();
     try {
       await client.query('BEGIN');
 
@@ -205,7 +205,7 @@ class SalesService {
   }
 
   async cancel(id, userId, reason) {
-    const client = await db.pool.connect();
+    const client = await db.connect();
     try {
       await client.query('BEGIN');
 

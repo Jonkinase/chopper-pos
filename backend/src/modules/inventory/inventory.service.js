@@ -19,7 +19,7 @@ class InventoryService {
   async adjustStock(productId, sucursalId, data, userId) {
     const { quantity, reason, type } = data; // type: 'ajuste_manual', 'entrada', 'devolucion'
     
-    const client = await db.pool.connect();
+    const client = await db.connect();
     try {
       await client.query('BEGIN');
 

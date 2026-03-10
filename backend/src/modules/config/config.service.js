@@ -11,7 +11,7 @@ class ConfigService {
   }
 
   async update(configData) {
-    const client = await db.pool.connect();
+    const client = await db.connect();
     try {
       await client.query('BEGIN');
       for (const [key, value] of Object.entries(configData)) {

@@ -28,7 +28,7 @@ class ClientsService {
     // Combinamos contacto para la tabla customers según esquema previo o lo extendemos
     const fullContactInfo = JSON.stringify({ email, phone, address, sucursal_id });
 
-    const client = await db.pool.connect();
+    const client = await db.connect();
     try {
       await client.query('BEGIN');
 

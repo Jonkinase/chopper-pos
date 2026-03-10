@@ -43,7 +43,7 @@ class AccountsService {
   async registerPayment(customerId, data, userId) {
     const { monto, metodo_pago, observaciones } = data;
     
-    const client = await db.pool.connect();
+    const client = await db.connect();
     try {
       await client.query('BEGIN');
 
