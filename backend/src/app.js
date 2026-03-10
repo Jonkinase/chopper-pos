@@ -43,6 +43,7 @@ app.use(express.json());
 
 // Static Assets
 app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
+app.get('/api/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
 // Routes
 app.use('/api/auth', authRoutes);
