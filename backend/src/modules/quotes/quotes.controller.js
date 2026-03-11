@@ -103,12 +103,23 @@ class QuotesController {
 
       // 1. Banner
       if (config.pdf_banner_path) {
-        const bannerPath = path.join(__dirname, '../../../public', config.pdf_banner_path);
-        if (fs.existsSync(bannerPath)) {
-          doc.image(bannerPath, 50, currentY, { width: 500, height: 100 });
-          currentY += 110;
-        }
-      }
+  try {
+    let imageBuffer;
+    if (config.pdf_banner_path.startsWith('data:')) {
+      const base64Data = config.pdf_banner_path.split(',')[1];
+      imageBuffer = Buffer.from(base64Data, 'base64');
+    } else {
+      const bannerPath = path.join(__dirname, '../../../public', config.pdf_banner_path);
+      if (fs.existsSync(bannerPath)) imageBuffer = fs.readFileSync(bannerPath);
+    }
+    if (imageBuffer) {
+      doc.image(imageBuffer, 50, currentY, { width: 500, height: 100 });
+      currentY += 110;
+    }
+  } catch (e) {
+    console.warn('No se pudo cargar el banner:', e.message);
+  }
+}
 
       // 2. Header Info - Two Columns
       // LEFT COLUMN: Branch Info
