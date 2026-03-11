@@ -139,7 +139,11 @@ const ConfigPage = () => {
               <div className="space-y-3">
                 <div className="aspect-[5/1] w-full rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden">
                   {config.pdf_banner_path ? (
-                    <img src={getFullUrl(config.pdf_banner_path)} alt="Banner" className="w-full h-full object-cover" />
+                    <img 
+                        src={config.pdf_banner_path?.startsWith('data:') ? config.pdf_banner_path : getFullUrl(config.pdf_banner_path)} 
+                        alt="Banner" 
+                        className="w-full h-full object-cover" 
+                    />
                   ) : (
                     <div className="text-center">
                       <ImageIcon className="w-8 h-8 text-slate-400 mx-auto mb-1" />
