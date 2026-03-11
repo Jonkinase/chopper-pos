@@ -6,17 +6,7 @@ const roleMiddleware = require('../../middleware/role.middleware');
 const multer = require('multer');
 const path = require('path');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../../../public/assets'));
-  },
-  filename: (req, file, cb) => {
-    const prefix = req.path.includes('banner') ? 'pdf_banner' : 'sidebar_logo';
-    const ext = path.extname(file.originalname);
-    cb(null, `${prefix}_${Date.now()}${ext}`);
-  }
-});
-
+const storage = multer.memoryStorage();
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
