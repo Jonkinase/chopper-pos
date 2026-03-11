@@ -100,7 +100,11 @@ const AppLayout = () => {
     ? (branches.find(b => b.id === activeBranch)?.name || 'Sin sucursal')
     : localBranchName;
 
-  const logoUrl = config.sidebar_logo_path ? `http://localhost:3000${config.sidebar_logo_path}` : null;
+  const logoUrl = config.sidebar_logo_path
+  ? config.sidebar_logo_path.startsWith('data:')
+    ? config.sidebar_logo_path
+    : `${import.meta.env.VITE_API_URL.replace('/api', '')}${config.sidebar_logo_path}`
+  : null;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row transition-colors duration-200">
