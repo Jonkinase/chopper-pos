@@ -73,7 +73,7 @@ class MetricsService {
       WHERE deleted_at IS NULL AND stock_actual <= 10 ${isAll ? '' : 'AND branch_id = $1'}`;
     
     const accountsBalanceQuery = `
-      SELECT COALESCE(SUM(ca.current_balance), 0) 
+      SELECT COALESCE(SUM(ca.current_balance), 0) as total_debt
       FROM customer_accounts ca
       JOIN customers c ON ca.customer_id = c.id
       WHERE ca.current_balance > 0 ${isAll ? '' : 'AND c.branch_id = $1'}`;
@@ -100,7 +100,7 @@ class MetricsService {
       ticket_promedio: current.total_count > 0 ? parseFloat(current.total_amount) / parseInt(current.total_count) : 0,
       variation_pct: variation,
       low_stock_count: parseInt(lowStockRes.rows[0].count),
-      total_debt: parseFloat(balanceRes.rows[0].sum),
+      total_debt: parseFloat(balanceRes.rows[0].total_debt),
       new_clients: parseInt(newClientsRes.rows[0].count)
     };
   }
@@ -195,33 +195,46 @@ class MetricsService {
 
   async getClientMetrics(sucursalId, fechaDesde, fechaHasta) {
     const isAll = sucursalId === 'all';
-    const branchFilter = isAll ? '' : 'AND s.branch_id = $3';
-    const params = [fechaDesde, fechaHasta];
-    if (!isAll) params.push(sucursalId);
+    
+    // Query 1: Top Clients by Spending
+    const topClientsParams = [fechaDesde, fechaHasta];
+    let topClientsBranchFilter = '';
+    if (!isAll) {
+      topClientsParams.push(sucursalId);
+      topClientsBranchFilter = 'AND s.branch_id = $3';
+    }
 
     const topClientsQuery = `
       SELECT c.name as label, SUM(s.total) as value
       FROM sales s
       JOIN customers c ON s.customer_id = c.id
-      WHERE s.created_at >= $1 AND s.created_at <= $2 AND s.status = 'completada' ${branchFilter}
+      WHERE s.created_at >= $1 AND s.created_at <= $2 AND s.status = 'completada' ${topClientsBranchFilter}
       GROUP BY c.name
       ORDER BY value DESC
       LIMIT 10`;
+
+    // Query 2: Top Debtors
+    const topDebtParams = [];
+    let topDebtBranchFilter = '';
+    if (!isAll) {
+      topDebtParams.push(sucursalId);
+      topDebtBranchFilter = 'AND c.branch_id = $1';
+    }
 
     const topDebtQuery = `
       SELECT c.name as label, ca.current_balance as value
       FROM customer_accounts ca
       JOIN customers c ON ca.customer_id = c.id
-      WHERE ca.current_balance > 0 ${isAll ? '' : 'AND c.branch_id = $3'}
+      WHERE ca.current_balance > 0 ${topDebtBranchFilter}
       ORDER BY value DESC
       LIMIT 10`;
 
-    const topClients = await db.query(topClientsQuery, params);
-    const topDebt = await db.query(topDebtQuery, params);
+    const topClients = await db.query(topClientsQuery, topClientsParams);
+    const topDebt = await db.query(topDebtQuery, topDebtParams);
 
     return {
-      top_clients_spending: topClients.rows,
-      top_clients_debt: topDebt.rows
+      top_clients_spending: topClients.rows.map(r => ({ ...r, value: parseFloat(r.value) })),
+      top_clients_debt: topDebt.rows.map(r => ({ ...r, value: parseFloat(r.value) }))
     };
   }
 

@@ -14,7 +14,7 @@ class AccountsController {
   async getDetail(req, res, next) {
     try {
       const branch_id = req.query.branch_id || req.user.branch_id;
-      const data = await accountsService.getDetail(req.params.id, branch_id);
+      const data = await accountsService.getDetail(req.params.cliente_id, branch_id);
       res.json({ success: true, data });
     } catch (err) {
       next(err);
@@ -24,7 +24,7 @@ class AccountsController {
   async registerPayment(req, res, next) {
     try {
       const branch_id = req.body.branch_id || req.user.branch_id;
-      const data = await accountsService.registerPayment(req.params.id, req.body, req.user.user_id, branch_id);
+      const data = await accountsService.registerPayment(req.params.cliente_id, req.body, req.user.user_id, branch_id);
       res.json({ success: true, data });
     } catch (err) {
       next(err);
