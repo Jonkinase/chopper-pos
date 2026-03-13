@@ -7,7 +7,8 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import Badge from '../../components/ui/Badge';
 import UserForm from './UserForm';
 import ChangePasswordModal from './ChangePasswordModal';
-import { Users as UsersIcon, Plus, Edit2, Trash2, KeyRound } from 'lucide-react';
+import UserAccessLogsModal from './UserAccessLogsModal';
+import { Users as UsersIcon, Plus, Edit2, Trash2, KeyRound, History } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const UsersList = () => {
@@ -22,6 +23,9 @@ const UsersList = () => {
 
   const [isPwdOpen, setIsPwdOpen] = useState(false);
   const [userToChangePwd, setUserToChangePwd] = useState(null);
+
+  const [isLogsOpen, setIsLogsOpen] = useState(false);
+  const [userToViewLogs, setUserToViewLogs] = useState(null);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -76,6 +80,17 @@ const UsersList = () => {
     { header: 'Email', accessorKey: 'email' },
     { header: 'Rol', cell: (row) => <RoleBadge role={row.role} /> },
     { header: 'Sucursal ID', cell: (row) => row.branch_id ? <span className="text-xs text-slate-600 dark:text-slate-400">{row.branch_id.substring(0,8)}...</span> : <span className="text-xs text-slate-900 dark:text-slate-100">- Global -</span> },
+    { 
+      header: 'Último Acceso', 
+      cell: (row) => row.last_login_at ? (
+        <div className="flex flex-col">
+          <span className="text-sm text-slate-900 dark:text-slate-100">{new Date(row.last_login_at).toLocaleString()}</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">{row.last_login_device}</span>
+        </div>
+      ) : (
+        <span className="text-sm text-slate-400 italic">Nunca</span>
+      )
+    },
     {
       header: 'Acciones',
       cell: (row) => (
@@ -93,6 +108,13 @@ const UsersList = () => {
             title="Cambiar Contraseña"
           >
             <KeyRound className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => { setUserToViewLogs(row); setIsLogsOpen(true); }}
+            className="p-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-emerald-900/50 text-emerald-500 rounded-lg transition-colors"
+            title="Ver Accesos"
+          >
+            <History className="w-4 h-4" />
           </button>
           <button
             onClick={() => { setUserToDelete(row); setIsDeleteOpen(true); }}
@@ -120,6 +142,9 @@ const UsersList = () => {
           <button onClick={() => { setUserToChangePwd(row); setIsPwdOpen(true); }} className="text-blue-400 p-1">
             <KeyRound className="w-4 h-4" />
           </button>
+          <button onClick={() => { setUserToViewLogs(row); setIsLogsOpen(true); }} className="text-emerald-500 p-1">
+            <History className="w-4 h-4" />
+          </button>
           <button onClick={() => { setUserToDelete(row); setIsDeleteOpen(true); }} className="text-red-400 p-1">
             <Trash2 className="w-4 h-4" />
           </button>
@@ -127,6 +152,11 @@ const UsersList = () => {
       </div>
       <div className="mt-3 flex items-center justify-between">
         <RoleBadge role={row.role} />
+        {row.last_login_at && (
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            {new Date(row.last_login_at).toLocaleDateString()}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -187,6 +217,17 @@ const UsersList = () => {
           user={userToChangePwd}
           onSuccess={() => setIsPwdOpen(false)}
           onClose={() => setIsPwdOpen(false)}
+        />
+      </Modal>
+
+      <Modal
+        isOpen={isLogsOpen}
+        onClose={() => setIsLogsOpen(false)}
+        title={`Registro de Accesos - ${userToViewLogs?.name}`}
+      >
+        <UserAccessLogsModal 
+          user={userToViewLogs}
+          onClose={() => setIsLogsOpen(false)}
         />
       </Modal>
 

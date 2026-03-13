@@ -230,3 +230,4 @@ CREATE TABLE notifications (
 );
 CREATE INDEX idx_notifications_user_id ON notifications(user_id);
 
+\n-- ------------------------------------------------------------------------\n-- LOGS DE ACCESO (Access Logs)\n-- ------------------------------------------------------------------------\nCREATE TABLE access_logs (\n    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),\n    user_id UUID REFERENCES users(id) ON DELETE CASCADE,\n    action VARCHAR(20) NOT NULL,\n    ip_address VARCHAR(45),\n    device_info VARCHAR(255),\n    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n);\nCREATE INDEX idx_access_logs_user_id ON access_logs(user_id);

@@ -48,6 +48,16 @@ class UsersController {
       next(err);
     }
   }
+
+  async getAccessLogs(req, res, next) {
+    try {
+      // Opcional: Validar que solo admin o encargado de la sucursal puedan ver esto
+      const data = await usersService.getAccessLogs(req.params.id);
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new UsersController();

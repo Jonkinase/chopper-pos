@@ -2,12 +2,37 @@ const bcrypt = require('bcryptjs');
 const db = require('../../config/db');
 
 class UsersService {
+  async recordAccessLog(userId, action, ipAddress, deviceInfo) {
+    const query = 'INSERT INTO access_logs (user_id, action, ip_address, device_info) VALUES ($1, $2, $3, $4)';
+    await db.query(query, [userId, action, ipAddress, deviceInfo]);
+  }
+
+  async getAccessLogs(userId, limit = 50) {
+    const query = 'SELECT action, ip_address, device_info, created_at FROM access_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2';
+    const { rows } = await db.query(query, [userId, limit]);
+    return rows;
+  }
+
   async getAll(role, branchId) {
-    let query = 'SELECT id, name, email, role, branch_id, created_at FROM users WHERE deleted_at IS NULL';
+    let query = `
+      SELECT 
+        u.id, u.name, u.email, u.role, u.branch_id, u.created_at,
+        al.created_at as last_login_at,
+        al.device_info as last_login_device
+      FROM users u
+      LEFT JOIN LATERAL (
+        SELECT created_at, device_info 
+        FROM access_logs 
+        WHERE user_id = u.id AND action = 'login'
+        ORDER BY created_at DESC 
+        LIMIT 1
+      ) al ON true
+      WHERE u.deleted_at IS NULL
+    `;
     const params = [];
 
     if (role === 'encargado') {
-      query += ' AND branch_id = $1';
+      query += ' AND u.branch_id = $1';
       params.push(branchId);
     }
 

@@ -91,7 +91,12 @@ const AppLayout = () => {
     { name: 'Configuración', path: '/config', icon: Settings, roles: ['admin'] },
   ].filter(item => item.roles.includes(user?.role));
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (err) {
+      console.error('Error al cerrar sesión en el servidor', err);
+    }
     logout();
     navigate('/login');
     toast.success('Sesión cerrada');
