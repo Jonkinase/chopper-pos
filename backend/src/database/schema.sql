@@ -213,3 +213,20 @@ CREATE TRIGGER update_customers_modtime BEFORE UPDATE ON customers FOR EACH ROW 
 CREATE TRIGGER update_customer_accounts_modtime BEFORE UPDATE ON customer_accounts FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_sales_modtime BEFORE UPDATE ON sales FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_quotes_modtime BEFORE UPDATE ON quotes FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+
+-- ------------------------------------------------------------------------
+-- NOTIFICACIONES (Notifications)
+-- ------------------------------------------------------------------------
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    related_id UUID,
+    branch_id UUID REFERENCES branches(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+

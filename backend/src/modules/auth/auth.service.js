@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const db = require('../../config/db');
+const notificationsService = require('../notifications/notifications.service');
+
+// Mapa en memoria para rastrear intentos fallidos (en producción usar Redis)
+const failedLoginAttempts = new Map();
 
 class AuthService {
   async login(email, password) {
@@ -15,8 +19,27 @@ class AuthService {
     const isPasswordMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!isPasswordMatch) {
+      const attempts = (failedLoginAttempts.get(email) || 0) + 1;
+      failedLoginAttempts.set(email, attempts);
+
+      if (attempts >= 3) {
+        // Disparar alerta de seguridad
+        notificationsService.createNotification({
+          type: 'SECURITY_ALERT',
+          title: 'Alerta de Seguridad',
+          message: `Múltiples intentos fallidos (${attempts}) de inicio de sesión para la cuenta: ${email}.`,
+          related_id: user.id
+        }).catch(console.error);
+        
+        // Reiniciar contador después de notificar para no saturar, o se podría bloquear la cuenta
+        failedLoginAttempts.set(email, 0);
+      }
+
       throw { status: 401, message: 'Credenciales inválidas' };
     }
+
+    // Inicio de sesión exitoso, reiniciar intentos
+    failedLoginAttempts.delete(email);
 
     const payload = {
       user_id: user.id,

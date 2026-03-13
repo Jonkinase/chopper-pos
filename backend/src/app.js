@@ -16,6 +16,7 @@ const accountsRoutes = require('./modules/accounts/accounts.routes');
 const quotesRoutes = require('./modules/quotes/quotes.routes');
 const metricsRoutes = require('./modules/metrics/metrics.routes');
 const configRoutes = require('./modules/config/config.routes');
+const notificationsRoutes = require('./modules/notifications/notifications.routes');
 
 const errorMiddleware = require('./middleware/error.middleware');
 
@@ -57,6 +58,7 @@ app.use('/api/accounts', accountsRoutes);
 app.use('/api/quotes', quotesRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Global Error Handler
 app.use(errorMiddleware);

@@ -1,4 +1,5 @@
 const db = require('../../config/db');
+const notificationsService = require('../notifications/notifications.service');
 
 class SalesService {
   async getAll(filters) {
@@ -101,6 +102,7 @@ class SalesService {
       }
 
       let total = 0;
+      const pendingNotifications = [];
 
       // 2. Procesar items y validar stock/branch
       for (const item of items) {
@@ -109,7 +111,7 @@ class SalesService {
         if (producto_id) {
           // Validar que el producto exista en la sucursal y tenga stock
           const invQuery = `
-            SELECT i.*, p.type as product_type 
+            SELECT i.*, p.type as product_type, p.name as product_name 
             FROM inventory i 
             JOIN products p ON i.product_id = p.id
             WHERE i.product_id = $1 AND i.branch_id = $2 AND i.deleted_at IS NULL`;
@@ -121,7 +123,19 @@ class SalesService {
 
           const inventory = invRes.rows[0];
           if (parseFloat(inventory.stock_actual) < parseFloat(cantidad)) {
-            throw { status: 400, message: `Stock insuficiente para el producto ${producto_id}` };
+            throw { status: 400, message: `Stock insuficiente para el producto ${inventory.product_name}` };
+          }
+
+          // Preparar notificación de stock bajo si aplica
+          const nuevoStock = parseFloat(inventory.stock_actual) - parseFloat(cantidad);
+          if (nuevoStock <= parseFloat(inventory.stock_minimo || 0)) {
+            pendingNotifications.push({
+              type: 'LOW_STOCK',
+              title: 'Alerta de Stock Bajo',
+              message: `El producto "${inventory.product_name}" ha alcanzado un nivel bajo (${nuevoStock} unidades restantes).`,
+              related_id: producto_id,
+              branch_id: sucursal_id
+            });
           }
         }
 
@@ -205,6 +219,23 @@ class SalesService {
       }
 
       await client.query('COMMIT');
+
+      // Disparar notificaciones asíncronamente
+      if (total >= 10000) {
+        pendingNotifications.push({
+          type: 'HIGH_SALE',
+          title: 'Venta Inusualmente Alta',
+          message: `Se ha registrado una venta por un total de $${total}.`,
+          related_id: saleId,
+          branch_id: sucursal_id
+        });
+      }
+
+      for (const notification of pendingNotifications) {
+        // No esperamos (await) para no bloquear la respuesta
+        notificationsService.createNotification(notification).catch(console.error);
+      }
+
       return { sale_id: saleId, total };
     } catch (err) {
       await client.query('ROLLBACK');

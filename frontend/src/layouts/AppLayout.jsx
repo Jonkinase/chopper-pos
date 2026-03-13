@@ -26,6 +26,7 @@ import {
 import toast from 'react-hot-toast';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useConfigStore } from '../store/configStore';
+import NotificationBell from '../components/ui/NotificationBell';
 
 const AppLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -218,10 +219,7 @@ const AppLayout = () => {
             >
               {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
-            <button className="relative p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-900"></span>
-            </button>
+            <NotificationBell />
           </div>
         </header>
 
