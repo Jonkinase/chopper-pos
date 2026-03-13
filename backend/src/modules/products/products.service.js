@@ -8,7 +8,7 @@ class ProductsService {
       SELECT 
         p.id, p.name, p.type, p.cost, p.description,
         i.id as inventory_id, i.branch_id, i.retail_price, i.wholesale_price, 
-        i.wholesale_min_qty, i.stock_actual
+        i.wholesale_min_qty, i.stock_actual, i.stock_minimo
       FROM products p
       INNER JOIN inventory i ON p.id = i.product_id
       WHERE i.branch_id = $1 AND p.deleted_at IS NULL AND i.deleted_at IS NULL
@@ -22,7 +22,7 @@ class ProductsService {
     const { 
       nombre, tipo, sucursal_id, costo, precio_menudeo, 
       tiene_mayoreo, precio_mayoreo, cantidad_minima_mayoreo, 
-      stock_actual, description
+      stock_actual, stock_minimo, description
     } = data;
 
     const client = await db.connect();
@@ -37,14 +37,15 @@ class ProductsService {
       const productId = productRes.rows[0].id;
 
       const inventoryQuery = `
-        INSERT INTO inventory (branch_id, product_id, retail_price, wholesale_price, wholesale_min_qty, stock_actual)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO inventory (branch_id, product_id, retail_price, wholesale_price, wholesale_min_qty, stock_actual, stock_minimo)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING *`;
       const inventoryRes = await client.query(inventoryQuery, [
         sucursal_id, productId, precio_menudeo, 
         tiene_mayoreo ? precio_mayoreo : null, 
         tiene_mayoreo ? cantidad_minima_mayoreo : null, 
-        stock_actual
+        stock_actual,
+        stock_minimo || 0
       ]);
 
       if (stock_actual > 0) {
@@ -69,7 +70,7 @@ class ProductsService {
     const { 
       nombre, tipo, costo, description,
       precio_menudeo, tiene_mayoreo, precio_mayoreo, 
-      cantidad_minima_mayoreo, sucursal_id 
+      cantidad_minima_mayoreo, stock_minimo, sucursal_id 
     } = data;
 
     const client = await db.connect();
@@ -86,12 +87,13 @@ class ProductsService {
       if (sucursal_id) {
         await client.query(`
           UPDATE inventory
-          SET retail_price = $1, wholesale_price = $2, wholesale_min_qty = $3, updated_at = CURRENT_TIMESTAMP
-          WHERE product_id = $4 AND branch_id = $5`,
+          SET retail_price = $1, wholesale_price = $2, wholesale_min_qty = $3, stock_minimo = $4, updated_at = CURRENT_TIMESTAMP
+          WHERE product_id = $5 AND branch_id = $6`,
           [
             precio_menudeo, 
             tiene_mayoreo ? precio_mayoreo : null, 
             tiene_mayoreo ? cantidad_minima_mayoreo : null, 
+            stock_minimo || 0,
             id, sucursal_id
           ]
         );
@@ -118,7 +120,7 @@ class ProductsService {
     const query = `
       SELECT 
         p.*, 
-        i.retail_price, i.wholesale_price, i.wholesale_min_qty, i.stock_actual
+        i.retail_price, i.wholesale_price, i.wholesale_min_qty, i.stock_actual, i.stock_minimo
       FROM products p
       LEFT JOIN inventory i ON p.id = i.product_id AND i.branch_id = $2
       WHERE p.id = $1 AND p.deleted_at IS NULL`;

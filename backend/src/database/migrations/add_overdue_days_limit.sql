@@ -1,0 +1,1 @@
+ALTER TABLE customer_accounts ADD COLUMN overdue_days_limit INT DEFAULT 1;

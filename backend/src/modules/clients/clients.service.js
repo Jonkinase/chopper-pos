@@ -3,7 +3,7 @@ const db = require('../../config/db');
 class ClientsService {
   async getAll(branchId, search) {
     let query = `
-      SELECT c.*, ca.current_balance
+      SELECT c.*, ca.current_balance, ca.overdue_days_limit
       FROM customers c
       LEFT JOIN customer_accounts ca ON c.id = ca.customer_id
       WHERE c.deleted_at IS NULL`;
@@ -25,7 +25,7 @@ class ClientsService {
   }
 
   async create(data) {
-    const { name, contact_info, email, phone, address, branch_id } = data;
+    const { name, contact_info, email, phone, address, branch_id, overdue_days_limit } = data;
     
     // Combinamos contacto para la tabla customers según esquema previo o lo extendemos
     const fullContactInfo = JSON.stringify({ email, phone, address });
@@ -41,11 +41,11 @@ class ClientsService {
       const { rows } = await client.query(query, [name, fullContactInfo, branch_id]);
       const customer = rows[0];
 
-      // Crear cuenta corriente inicial con balance 0
+      // Crear cuenta corriente inicial con balance 0 y el límite de días
       await client.query(`
-        INSERT INTO customer_accounts (customer_id, current_balance)
-        VALUES ($1, 0)`,
-        [customer.id]
+        INSERT INTO customer_accounts (customer_id, current_balance, overdue_days_limit)
+        VALUES ($1, 0, $2)`,
+        [customer.id, overdue_days_limit || 1]
       );
 
       await client.query('COMMIT');
@@ -59,27 +59,48 @@ class ClientsService {
   }
 
   async update(id, data, branchId) {
-    const { name, contact_info } = data;
-    let query = `
-      UPDATE customers
-      SET name = $1, contact_info = $2, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3 AND deleted_at IS NULL`;
-    const params = [name, contact_info, id];
+    const { name, contact_info, overdue_days_limit } = data;
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
 
-    if (branchId) {
-      params.push(branchId);
-      query += ` AND branch_id = $${params.length}`;
+      let customerQuery = `
+        UPDATE customers
+        SET name = $1, contact_info = $2, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3 AND deleted_at IS NULL`;
+      const customerParams = [name, contact_info, id];
+
+      if (branchId) {
+        customerParams.push(branchId);
+        customerQuery += ` AND branch_id = $${customerParams.length}`;
+      }
+
+      customerQuery += ' RETURNING *';
+      const { rows } = await client.query(customerQuery, customerParams);
+      
+      if (rows.length === 0) throw { status: 404, message: 'Cliente no encontrado' };
+
+      // Actualizar límite en la cuenta
+      await client.query(`
+        UPDATE customer_accounts 
+        SET overdue_days_limit = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE customer_id = $2`,
+        [overdue_days_limit || 1, id]
+      );
+
+      await client.query('COMMIT');
+      return rows[0];
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-
-    query += ' RETURNING *';
-    const { rows } = await db.query(query, params);
-    if (rows.length === 0) throw { status: 404, message: 'Cliente no encontrado' };
-    return rows[0];
   }
 
   async getById(id, branchId) {
     let query = `
-      SELECT c.*, ca.current_balance
+      SELECT c.*, ca.current_balance, ca.overdue_days_limit
       FROM customers c
       LEFT JOIN customer_accounts ca ON c.id = ca.customer_id
       WHERE c.id = $1 AND c.deleted_at IS NULL`;

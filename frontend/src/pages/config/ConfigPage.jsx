@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { configApi } from '../../api/config.api';
 import { useConfigStore } from '../../store/configStore';
 import toast from 'react-hot-toast';
-import { Image as ImageIcon, Building, FileText, Save, Trash2, Upload, Loader2 } from 'lucide-react';
+import { Image as ImageIcon, Building, FileText, Save, Trash2, Upload, Loader2, Bell } from 'lucide-react';
 
 const ConfigPage = () => {
   const { config, fetchConfig, updateConfig } = useConfigStore();
@@ -16,7 +16,8 @@ const ConfigPage = () => {
     company_address: '',
     company_phone: '',
     pdf_footer_message: '',
-    pdf_banner_validity: ''
+    pdf_banner_validity: '',
+    high_sale_limit: ''
   });
 
   useEffect(() => {
@@ -31,7 +32,8 @@ const ConfigPage = () => {
         company_address: config.company_address || '',
         company_phone: config.company_phone || '',
         pdf_footer_message: config.pdf_footer_message || '',
-        pdf_banner_validity: config.pdf_banner_validity || ''
+        pdf_banner_validity: config.pdf_banner_validity || '',
+        high_sale_limit: config.high_sale_limit || ''
       });
     }
   }, [config]);
@@ -223,6 +225,34 @@ const ConfigPage = () => {
           <button onClick={handleSaveText} disabled={loading} className="px-8 bg-slate-900 dark:bg-primary-600 hover:bg-slate-800 dark:hover:bg-primary-500 text-white py-2 rounded-lg font-bold transition-all flex items-center justify-center space-x-2">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             <span>Actualizar Textos</span>
+          </button>
+        </div>
+      </div>
+
+      {/* CARD 4: NOTIFICACIONES */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex items-center space-x-2">
+          <Bell className="w-5 h-5 text-primary-500" />
+          <h2 className="font-bold text-slate-900 dark:text-slate-100">Alertas y Notificaciones</h2>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-500 uppercase">Límite de Alerta para Venta Alta ($)</label>
+            <input 
+              type="number" 
+              name="high_sale_limit" 
+              value={formData.high_sale_limit} 
+              onChange={handleInputChange} 
+              className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 outline-none" 
+              placeholder="Ej: 10000" 
+            />
+            <p className="text-[10px] text-slate-500 italic mt-1">Se disparará una notificación cuando una venta supere este monto.</p>
+          </div>
+        </div>
+        <div className="p-4 bg-slate-50 dark:bg-slate-900/30 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+          <button onClick={handleSaveText} disabled={loading} className="px-8 bg-slate-900 dark:bg-primary-600 hover:bg-slate-800 dark:hover:bg-primary-500 text-white py-2 rounded-lg font-bold transition-all flex items-center justify-center space-x-2">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <span>Guardar Configuración</span>
           </button>
         </div>
       </div>

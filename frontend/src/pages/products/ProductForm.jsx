@@ -18,6 +18,7 @@ const ProductForm = ({ initialData, onSubmit, isLoading, onCancel }) => {
     precio_mayoreo: z.coerce.number().optional(),
     cantidad_minima_mayoreo: z.coerce.number().optional(),
     stock_actual: z.coerce.number().min(0),
+    stock_minimo: z.coerce.number().min(0).optional(),
     sucursal_id: z.string(),
   }).refine((data) => {
     if (data.tiene_mayoreo) {
@@ -47,6 +48,7 @@ const ProductForm = ({ initialData, onSubmit, isLoading, onCancel }) => {
       precio_mayoreo: initialData.wholesale_price || '',
       cantidad_minima_mayoreo: initialData.wholesale_min_qty || '',
       stock_actual: initialData.stock_actual || 0,
+      stock_minimo: initialData.stock_minimo || 0,
       sucursal_id: activeBranch,
     } : {
       nombre: '',
@@ -57,6 +59,7 @@ const ProductForm = ({ initialData, onSubmit, isLoading, onCancel }) => {
       precio_mayoreo: '',
       cantidad_minima_mayoreo: '',
       stock_actual: 0,
+      stock_minimo: 0,
       sucursal_id: activeBranch,
     },
   });
@@ -148,6 +151,14 @@ const ProductForm = ({ initialData, onSubmit, isLoading, onCancel }) => {
             disabled={!!initialData} // Solo editable al crear
             {...register('stock_actual')}
             className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 outline-none transition-all disabled:opacity-50"
+          />
+        </FormField>
+        <FormField label="Stock Mínimo (Alerta)" error={errors.stock_minimo?.message}>
+          <input
+            type="number"
+            step="0.001"
+            {...register('stock_minimo')}
+            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 outline-none transition-all"
           />
         </FormField>
       </div>

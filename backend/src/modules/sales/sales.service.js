@@ -1,5 +1,6 @@
 const db = require('../../config/db');
 const notificationsService = require('../notifications/notifications.service');
+const configService = require('../config/config.service');
 
 class SalesService {
   async getAll(filters) {
@@ -220,8 +221,12 @@ class SalesService {
 
       await client.query('COMMIT');
 
+      // Obtener limite de venta alta de configuracion
+      const rawLimit = await configService.get('high_sale_limit');
+      const highSaleLimit = rawLimit ? parseFloat(rawLimit) : 10000;
+
       // Disparar notificaciones asíncronamente
-      if (total >= 10000) {
+      if (total >= highSaleLimit) {
         pendingNotifications.push({
           type: 'HIGH_SALE',
           title: 'Venta Inusualmente Alta',
