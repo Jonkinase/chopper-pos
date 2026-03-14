@@ -125,6 +125,7 @@ const AppLayout = () => {
           <button onClick={toggleDarkMode} className="p-2 text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors">
             {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
+          <NotificationBell />
           <button onClick={() => setSidebarOpen(true)} className="p-2 text-slate-700 dark:text-slate-100">
             <Menu className="w-6 h-6" />
           </button>
