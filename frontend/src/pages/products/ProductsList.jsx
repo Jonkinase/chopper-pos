@@ -99,9 +99,13 @@ const ProductsList = () => {
     { header: 'Precio Menudeo', cell: (row) => `$${row.retail_price}` },
     { header: 'Precio Mayoreo', cell: (row) => row.wholesale_price ? `$${row.wholesale_price} (min ${row.wholesale_min_qty})` : '-' },
     { header: 'Stock Actual', cell: (row) => (
-      <span className={`font-medium ${parseFloat(row.stock_actual) <= 10 ? 'text-red-400' : 'text-emerald-400'}`}>
-        {row.stock_actual}
-      </span>
+      row.requires_stock ? (
+        <span className={`font-medium ${parseFloat(row.stock_actual) <= 10 ? 'text-red-400' : 'text-emerald-400'}`}>
+          {row.stock_actual}
+        </span>
+      ) : (
+        <span className="text-slate-500 italic">N/A</span>
+      )
     )},
     {
       header: 'Acciones',
@@ -147,9 +151,13 @@ const ProductsList = () => {
         </div>
         <div className="bg-slate-100 dark:bg-slate-700 p-2 rounded-lg">
           <span className="text-slate-600 dark:text-slate-400 block text-xs">Stock</span>
-          <span className={`font-medium ${parseFloat(row.stock_actual) <= 10 ? 'text-red-400' : 'text-emerald-400'}`}>
-            {row.stock_actual}
-          </span>
+          {row.requires_stock ? (
+            <span className={`font-medium ${parseFloat(row.stock_actual) <= 10 ? 'text-red-400' : 'text-emerald-400'}`}>
+              {row.stock_actual}
+            </span>
+          ) : (
+            <span className="text-slate-500 italic">N/A</span>
+          )}
         </div>
       </div>
     </div>

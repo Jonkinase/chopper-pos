@@ -112,7 +112,7 @@ class SalesService {
         if (producto_id) {
           // Validar que el producto exista en la sucursal y tenga stock
           const invQuery = `
-            SELECT i.*, p.type as product_type, p.name as product_name 
+            SELECT i.*, p.type as product_type, p.name as product_name, p.requires_stock
             FROM inventory i 
             JOIN products p ON i.product_id = p.id
             WHERE i.product_id = $1 AND i.branch_id = $2 AND i.deleted_at IS NULL`;
@@ -123,20 +123,23 @@ class SalesService {
           }
 
           const inventory = invRes.rows[0];
-          if (parseFloat(inventory.stock_actual) < parseFloat(cantidad)) {
-            throw { status: 400, message: `Stock insuficiente para el producto ${inventory.product_name}` };
-          }
 
-          // Preparar notificación de stock bajo si aplica
-          const nuevoStock = parseFloat(inventory.stock_actual) - parseFloat(cantidad);
-          if (nuevoStock <= parseFloat(inventory.stock_minimo || 0)) {
-            pendingNotifications.push({
-              type: 'LOW_STOCK',
-              title: 'Alerta de Stock Bajo',
-              message: `El producto "${inventory.product_name}" ha alcanzado un nivel bajo (${nuevoStock} unidades restantes).`,
-              related_id: producto_id,
-              branch_id: sucursal_id
-            });
+          if (inventory.requires_stock) {
+            if (parseFloat(inventory.stock_actual) < parseFloat(cantidad)) {
+              throw { status: 400, message: `Stock insuficiente para el producto ${inventory.product_name}` };
+            }
+
+            // Preparar notificación de stock bajo si aplica
+            const nuevoStock = parseFloat(inventory.stock_actual) - parseFloat(cantidad);
+            if (nuevoStock <= parseFloat(inventory.stock_minimo || 0)) {
+              pendingNotifications.push({
+                type: 'LOW_STOCK',
+                title: 'Alerta de Stock Bajo',
+                message: `El producto "${inventory.product_name}" ha alcanzado un nivel bajo (${nuevoStock} unidades restantes).`,
+                related_id: producto_id,
+                branch_id: sucursal_id
+              });
+            }
           }
         }
 
@@ -174,21 +177,27 @@ class SalesService {
         );
 
         if (producto_id) {
-          // Descontar stock
-          const updateStockQuery = `
-            UPDATE inventory 
-            SET stock_actual = stock_actual - $1, updated_at = CURRENT_TIMESTAMP
-            WHERE product_id = $2 AND branch_id = $3
-            RETURNING id`;
-          const invUpdateRes = await client.query(updateStockQuery, [cantidad, producto_id, sucursal_id]);
-          const inventoryId = invUpdateRes.rows[0].id;
+          // Obtener requiere_stock
+          const prodRes = await client.query('SELECT requires_stock FROM products WHERE id = $1', [producto_id]);
+          const requiresStock = prodRes.rows[0].requires_stock;
 
-          // Registrar movimiento de inventario
-          await client.query(`
-            INSERT INTO inventory_movements (inventory_id, user_id, type, quantity, reason)
-            VALUES ($1, $2, 'venta', $3, $4)`,
-            [inventoryId, userId, -cantidad, `Venta #${saleId}`]
-          );
+          if (requiresStock) {
+            // Descontar stock
+            const updateStockQuery = `
+              UPDATE inventory 
+              SET stock_actual = stock_actual - $1, updated_at = CURRENT_TIMESTAMP
+              WHERE product_id = $2 AND branch_id = $3
+              RETURNING id`;
+            const invUpdateRes = await client.query(updateStockQuery, [cantidad, producto_id, sucursal_id]);
+            const inventoryId = invUpdateRes.rows[0].id;
+
+            // Registrar movimiento de inventario
+            await client.query(`
+              INSERT INTO inventory_movements (inventory_id, user_id, type, quantity, reason)
+              VALUES ($1, $2, 'venta', $3, $4)`,
+              [inventoryId, userId, -cantidad, `Venta #${saleId}`]
+            );
+          }
         }
       }
 
@@ -264,9 +273,13 @@ class SalesService {
       await client.query('UPDATE sales SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', ['anulada', id]);
 
       // 3. Revertir stock y registrar movimientos
-      const itemsRes = await client.query('SELECT * FROM sale_items WHERE sale_id = $1', [id]);
+      const itemsRes = await client.query(`
+        SELECT si.*, p.requires_stock 
+        FROM sale_items si
+        LEFT JOIN products p ON si.product_id = p.id
+        WHERE si.sale_id = $1`, [id]);
       for (const item of itemsRes.rows) {
-        if (item.product_id) {
+        if (item.product_id && item.requires_stock) {
           const updateStockQuery = `
             UPDATE inventory 
             SET stock_actual = stock_actual + $1, updated_at = CURRENT_TIMESTAMP

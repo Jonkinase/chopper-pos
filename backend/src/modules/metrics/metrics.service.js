@@ -69,8 +69,9 @@ class MetricsService {
 
     // Other Metrics
     const lowStockQuery = `
-      SELECT COUNT(*) FROM inventory 
-      WHERE deleted_at IS NULL AND stock_actual <= 10 ${isAll ? '' : 'AND branch_id = $1'}`;
+      SELECT COUNT(*) FROM inventory i
+      JOIN products p ON i.product_id = p.id
+      WHERE i.deleted_at IS NULL AND i.stock_actual <= 10 AND p.requires_stock = TRUE ${isAll ? '' : 'AND i.branch_id = $1'}`;
     
     const accountsBalanceQuery = `
       SELECT COALESCE(SUM(ca.current_balance), 0) as total_debt
@@ -247,7 +248,7 @@ class MetricsService {
       FROM inventory i
       JOIN products p ON i.product_id = p.id
       JOIN branches b ON i.branch_id = b.id
-      WHERE i.deleted_at IS NULL ${isAll ? '' : 'AND i.branch_id = $1'}
+      WHERE i.deleted_at IS NULL AND p.requires_stock = TRUE ${isAll ? '' : 'AND i.branch_id = $1'}
       GROUP BY b.name`;
 
     const lowStockQuery = `
@@ -255,7 +256,7 @@ class MetricsService {
       FROM inventory i
       JOIN products p ON i.product_id = p.id
       JOIN branches b ON i.branch_id = b.id
-      WHERE i.deleted_at IS NULL AND i.stock_actual <= 10 ${isAll ? '' : 'AND i.branch_id = $1'}
+      WHERE i.deleted_at IS NULL AND i.stock_actual <= 10 AND p.requires_stock = TRUE ${isAll ? '' : 'AND i.branch_id = $1'}
       ORDER BY b.name, p.name`;
 
     const valuation = await db.query(valuationQuery, params);

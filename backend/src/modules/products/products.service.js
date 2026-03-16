@@ -6,7 +6,7 @@ class ProductsService {
 
     const query = `
       SELECT 
-        p.id, p.name, p.type, p.cost, p.description,
+        p.id, p.name, p.type, p.cost, p.description, p.requires_stock,
         i.id as inventory_id, i.branch_id, i.retail_price, i.wholesale_price, 
         i.wholesale_min_qty, i.stock_actual, i.stock_minimo
       FROM products p
@@ -22,7 +22,7 @@ class ProductsService {
     const { 
       nombre, tipo, sucursal_id, costo, precio_menudeo, 
       tiene_mayoreo, precio_mayoreo, cantidad_minima_mayoreo, 
-      stock_actual, stock_minimo, description
+      stock_actual, stock_minimo, description, requires_stock
     } = data;
 
     const client = await db.connect();
@@ -30,10 +30,10 @@ class ProductsService {
       await client.query('BEGIN');
 
       const productQuery = `
-        INSERT INTO products (name, type, cost, description)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO products (name, type, cost, description, requires_stock)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING id`;
-      const productRes = await client.query(productQuery, [nombre, tipo, costo, description]);
+      const productRes = await client.query(productQuery, [nombre, tipo, costo, description, requires_stock !== undefined ? requires_stock : true]);
       const productId = productRes.rows[0].id;
 
       const inventoryQuery = `
@@ -70,7 +70,7 @@ class ProductsService {
     const { 
       nombre, tipo, costo, description,
       precio_menudeo, tiene_mayoreo, precio_mayoreo, 
-      cantidad_minima_mayoreo, stock_minimo, sucursal_id 
+      cantidad_minima_mayoreo, stock_minimo, sucursal_id, requires_stock
     } = data;
 
     const client = await db.connect();
@@ -79,9 +79,9 @@ class ProductsService {
 
       await client.query(`
         UPDATE products 
-        SET name = $1, type = $2, cost = $3, description = $4, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $5`,
-        [nombre, tipo, costo, description, id]
+        SET name = $1, type = $2, cost = $3, description = $4, requires_stock = $5, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $6`,
+        [nombre, tipo, costo, description, requires_stock !== undefined ? requires_stock : true, id]
       );
 
       if (sucursal_id) {
