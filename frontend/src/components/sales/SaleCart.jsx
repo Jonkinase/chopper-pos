@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, ShoppingCart, CheckCircle2, Zap } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, ShoppingCart, CheckCircle2, Zap, Clock, ChevronDown, Trash2 } from 'lucide-react';
 import CartItem from './CartItem';
 import ProductInputModal from './ProductInputModal';
 import FastItemModal from './FastItemModal';
@@ -30,6 +30,89 @@ const SaleCart = ({
   const [paymentMethod, setPaymentMethod] = useState(defaultPayment);
   const [observations, setObservaciones] = useState('');
   const [mobileTab, setMobileTab] = useState('productos'); // 'productos' | 'carrito'
+
+  const [heldSales, setHeldSales] = useState([]);
+  const [showHeldSalesMenu, setShowHeldSalesMenu] = useState(false);
+  const heldSalesMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (heldSalesMenuRef.current && !heldSalesMenuRef.current.contains(event.target)) {
+        setShowHeldSalesMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Load held sales
+  useEffect(() => {
+    if (!activeBranch) return;
+    const stored = localStorage.getItem(`chopper_held_sales_${activeBranch}`);
+    if (stored) {
+      try {
+        setHeldSales(JSON.parse(stored));
+      } catch (e) {
+        console.error('Error parsing held sales', e);
+      }
+    }
+  }, [activeBranch]);
+
+  // Save held sales
+  useEffect(() => {
+    if (!activeBranch) return;
+    localStorage.setItem(`chopper_held_sales_${activeBranch}`, JSON.stringify(heldSales));
+  }, [heldSales, activeBranch]);
+
+  const handleHoldSale = () => {
+    if (cart.length === 0) return;
+    
+    const newHold = {
+      id: Date.now().toString(),
+      name: `Venta #${heldSales.length + 1}`,
+      cart: [...cart],
+      selectedClient,
+      paymentMethod,
+      observations,
+      timestamp: new Date().toISOString()
+    };
+
+    setHeldSales(prev => [...prev, newHold]);
+    setCart([]);
+    setSelectedClient('');
+    setPaymentMethod(defaultPayment);
+    setObservaciones('');
+    toast.success('Venta puesta en espera');
+  };
+
+  const handleResumeSale = (heldSale) => {
+    if (cart.length > 0) {
+      const currentHold = {
+        id: Date.now().toString(),
+        name: `Venta #${heldSales.length + 1}`,
+        cart: [...cart],
+        selectedClient,
+        paymentMethod,
+        observations,
+        timestamp: new Date().toISOString()
+      };
+      setHeldSales(prev => [...prev.filter(s => s.id !== heldSale.id), currentHold]);
+      toast.success('Venta actual puesta en espera');
+    } else {
+      setHeldSales(prev => prev.filter(s => s.id !== heldSale.id));
+    }
+
+    setCart(heldSale.cart || []);
+    setSelectedClient(heldSale.selectedClient || '');
+    setPaymentMethod(heldSale.paymentMethod || defaultPayment);
+    setObservaciones(heldSale.observations || '');
+    setShowHeldSalesMenu(false);
+  };
+
+  const handleDiscardHeldSale = (e, id) => {
+    e.stopPropagation();
+    setHeldSales(prev => prev.filter(s => s.id !== id));
+  };
 
   // Load Products & Clients
   useEffect(() => {
@@ -205,9 +288,60 @@ const SaleCart = ({
 
         {/* RIGHT COLUMN: CARRITO Y CIERRE */}
         <div className={`w-full lg:w-[400px] flex-col min-h-0 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden ${mobileTab === 'carrito' ? 'flex' : 'hidden lg:flex'}`}>
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center space-x-2">
-          <ShoppingCart className="w-5 h-5 text-primary-500" />
-          <h2 className="font-bold text-slate-900 dark:text-slate-100">Resumen de Operación</h2>
+        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <ShoppingCart className="w-5 h-5 text-primary-500" />
+            <h2 className="font-bold text-slate-900 dark:text-slate-100">Resumen de Operación</h2>
+          </div>
+          
+          {/* Held Sales Dropdown */}
+          <div className="relative" ref={heldSalesMenuRef}>
+            <button
+              onClick={() => setShowHeldSalesMenu(!showHeldSalesMenu)}
+              disabled={heldSales.length === 0}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Clock className="w-4 h-4" />
+              <span>En espera</span>
+              {heldSales.length > 0 && (
+                <span className="bg-yellow-500 text-yellow-900 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                  {heldSales.length}
+                </span>
+              )}
+              <ChevronDown className="w-4 h-4 ml-1" />
+            </button>
+
+            {showHeldSalesMenu && heldSales.length > 0 && (
+              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
+                  <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ventas en espera</h3>
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {heldSales.map(sale => (
+                    <div 
+                      key={sale.id}
+                      onClick={() => handleResumeSale(sale)}
+                      className="p-3 border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors flex justify-between items-center group"
+                    >
+                      <div className="overflow-hidden">
+                        <p className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">{sale.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {sale.cart.length} ítems • {formatCurrency(sale.cart.reduce((a, b) => a + b.subtotal, 0))}
+                        </p>
+                      </div>
+                      <button 
+                        onClick={(e) => handleDiscardHeldSale(e, sale.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                        title="Descartar venta en espera"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Lista de Carrito */}
@@ -276,20 +410,30 @@ const SaleCart = ({
             <span className="text-3xl font-black text-slate-900 dark:text-white">{formatCurrency(total)}</span>
           </div>
 
-          <button
-            onClick={handleSubmit}
-            disabled={cart.length === 0 || isSubmitting || (allowAccount && paymentMethod === 'cuenta_corriente' && requireClientForAccount && !selectedClient)}
-            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? (
-              <span>Procesando...</span>
-            ) : (
-              <>
-                <CheckCircle2 className="w-5 h-5" />
-                <span>{submitLabel}</span>
-              </>
-            )}
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={handleSubmit}
+              disabled={cart.length === 0 || isSubmitting || (allowAccount && paymentMethod === 'cuenta_corriente' && requireClientForAccount && !selectedClient)}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <span>Procesando...</span>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>{submitLabel}</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleHoldSale}
+              disabled={cart.length === 0 || isSubmitting}
+              className="w-full py-2 bg-yellow-500 hover:bg-yellow-400 text-yellow-950 font-bold rounded-xl transition-all shadow-md flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Clock className="w-4 h-4" />
+              <span>Poner en espera</span>
+            </button>
+          </div>
         </div>
       </div>
       </div>
