@@ -172,9 +172,10 @@ class QuotesService {
         cantidad: item.quantity,
         precio_unitario: item.unit_price_applied,
         tipo_precio: item.price_type,
+        unit_type: item.unit_type,
         subtotal: item.subtotal
       })),
-      quote_id: id // Necesitaríamos agregar esta columna a la tabla sales
+      quote_id: id
     };
 
     const sale = await salesService.create(saleData, userId);

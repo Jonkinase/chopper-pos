@@ -246,21 +246,40 @@ const QuotesList = () => {
                 </>
               )}
               {quoteDetail.status === 'aprobado' && (
-                <button 
-                  onClick={async () => {
-                    try {
-                      await api.post(`/quotes/${quoteDetail.id}/convert-to-sale`, { tipo_pago: 'contado' });
-                      toast.success('¡Presupuesto convertido a Venta!');
-                      fetchQuotes();
-                      setIsDetailOpen(false);
-                    } catch(e) {
-                      toast.error('Error al convertir');
-                    }
-                  }} 
-                  className="w-full py-3 bg-primary-600 text-white hover:bg-primary-500 rounded-lg font-bold transition-colors shadow-lg shadow-primary-900/20"
-                >
-                  Convertir a Venta (Contado)
-                </button>
+                <div className="flex flex-col sm:flex-row w-full gap-3">
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await api.post(`/quotes/${quoteDetail.id}/convert-to-sale`, { tipo_pago: 'contado' });
+                        toast.success('¡Presupuesto convertido a Venta!');
+                        fetchQuotes();
+                        setIsDetailOpen(false);
+                      } catch(e) {
+                        toast.error('Error al convertir');
+                      }
+                    }} 
+                    className="flex-1 py-3 bg-primary-600 text-white hover:bg-primary-500 rounded-lg font-bold transition-colors shadow-lg shadow-primary-900/20"
+                  >
+                    Convertir a Venta (Contado)
+                  </button>
+                  {quoteDetail.customer_id && (
+                    <button 
+                      onClick={async () => {
+                        try {
+                          await api.post(`/quotes/${quoteDetail.id}/convert-to-sale`, { tipo_pago: 'cuenta_corriente' });
+                          toast.success('¡Presupuesto convertido a Cuenta Corriente!');
+                          fetchQuotes();
+                          setIsDetailOpen(false);
+                        } catch(e) {
+                          toast.error(e.response?.data?.message || 'Error al convertir a cuenta corriente');
+                        }
+                      }} 
+                      className="flex-1 py-3 bg-indigo-600 text-white hover:bg-indigo-500 rounded-lg font-bold transition-colors shadow-lg shadow-indigo-900/20"
+                    >
+                      Convertir a Venta (Cuenta Corriente)
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>
