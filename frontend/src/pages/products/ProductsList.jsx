@@ -7,7 +7,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import Badge from '../../components/ui/Badge';
 import ProductForm from './ProductForm';
 import { useAuthStore } from '../../store/authStore';
-import { Package, Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
+import { Package, Plus, Edit2, Trash2, Search, Filter, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const ProductsList = () => {
@@ -54,6 +54,29 @@ const ProductsList = () => {
     }
     setFilteredProducts(result);
   }, [search, typeFilter, products]);
+
+  const handleExportPdf = async () => {
+    try {
+      toast.loading('Generando PDF...', { id: 'pdf-export' });
+      const response = await api.get(`/products/export/pdf?sucursal_id=${activeBranch}&type=${typeFilter}`, {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Catalogo.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Catálogo exportado', { id: 'pdf-export' });
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast.error('Error al generar el catálogo', { id: 'pdf-export' });
+    }
+  };
 
   const handleSave = async (formData) => {
     try {
@@ -172,13 +195,22 @@ const ProductsList = () => {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Catálogo de Productos</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">Gestiona precios y productos de la sucursal</p>
         </div>
-        <button
-          onClick={() => { setEditingProduct(null); setIsFormOpen(true); }}
-          className="flex items-center space-x-2 bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-lg transition-colors font-medium"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Nuevo Producto</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportPdf}
+            className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg transition-colors font-medium border border-slate-300 dark:border-slate-600"
+          >
+            <Download className="w-5 h-5" />
+            <span className="hidden sm:inline">Exportar Catálogo</span>
+          </button>
+          <button
+            onClick={() => { setEditingProduct(null); setIsFormOpen(true); }}
+            className="flex items-center space-x-2 bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="hidden sm:inline">Nuevo Producto</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">

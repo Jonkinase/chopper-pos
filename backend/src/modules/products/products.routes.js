@@ -8,6 +8,7 @@ const sucursalMiddleware = require('../../middleware/sucursal.middleware');
 router.use(authMiddleware);
 
 router.get('/', productsController.getAll);
+router.get('/export/pdf', productsController.exportPdf);
 router.get('/:id', productsController.getById);
 
 // Solo admin y encargado pueden gestionar productos
