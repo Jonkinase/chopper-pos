@@ -18,10 +18,21 @@ class ConfigController {
         'company_address',
         'company_phone',
         'pdf_footer_message',
-        'pdf_banner_validity'
+        'pdf_banner_validity',
+        'high_sale_limit',
+        'arca_base_url',
+        'arca_api_key',
+        'arca_env',
+        'arca_punto_venta',
+        'arca_condicion_venta_default',
+        'arca_emitter_name',
+        'arca_emitter_cuit',
+        'arca_emitter_address',
+        'arca_emitter_iva_condition',
+        'prices_include_vat',
       ];
       const updates = {};
-      allowedKeys.forEach(key => {
+      allowedKeys.forEach((key) => {
         if (req.body[key] !== undefined) updates[key] = req.body[key];
       });
       await configService.update(updates);
@@ -34,10 +45,8 @@ class ConfigController {
   async uploadBanner(req, res, next) {
     try {
       if (!req.file) throw { status: 400, message: 'No se subió ningún archivo' };
-
       const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
       await configService.set('pdf_banner_path', base64);
-
       res.json({ success: true, data: { path: base64 } });
     } catch (err) {
       next(err);
@@ -47,10 +56,8 @@ class ConfigController {
   async uploadLogo(req, res, next) {
     try {
       if (!req.file) throw { status: 400, message: 'No se subió ningún archivo' };
-
       const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
       await configService.set('sidebar_logo_path', base64);
-
       res.json({ success: true, data: { path: base64 } });
     } catch (err) {
       next(err);

@@ -8,9 +8,9 @@ router.use(authMiddleware);
 
 router.get('/', salesController.getAll);
 router.get('/:id', salesController.getById);
+router.get('/:id/invoice/pdf', salesController.downloadInvoicePdf);
 router.post('/', salesController.create);
-
-// Solo admin y encargado pueden anular ventas
+router.post('/:id/billing/retry', roleMiddleware(['admin', 'encargado']), salesController.retryBilling);
 router.put('/:id/cancel', roleMiddleware(['admin', 'encargado']), salesController.cancel);
 
 module.exports = router;

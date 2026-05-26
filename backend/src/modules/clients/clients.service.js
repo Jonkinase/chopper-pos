@@ -16,7 +16,12 @@ class ClientsService {
 
     if (search) {
       params.push(`%${search}%`);
-      query += ` AND (c.name ILIKE $${params.length} OR c.contact_info ILIKE $${params.length})`;
+      query += ` AND (
+        c.name ILIKE $${params.length}
+        OR COALESCE(c.business_name, '') ILIKE $${params.length}
+        OR COALESCE(c.cuit, '') ILIKE $${params.length}
+        OR c.contact_info ILIKE $${params.length}
+      )`;
     }
 
     query += ' ORDER BY c.name ASC';
@@ -25,26 +30,45 @@ class ClientsService {
   }
 
   async create(data) {
-    const { name, contact_info, email, phone, address, branch_id, overdue_days_limit } = data;
-    
-    // Combinamos contacto para la tabla customers según esquema previo o lo extendemos
-    const fullContactInfo = JSON.stringify({ email, phone, address });
+    const {
+      name,
+      contact_info,
+      email,
+      phone,
+      address,
+      branch_id,
+      overdue_days_limit,
+      business_name,
+      cuit,
+      iva_condition,
+      fiscal_address,
+    } = data;
 
+    const fullContactInfo = contact_info || JSON.stringify({ email, phone, address });
     const client = await db.connect();
+
     try {
       await client.query('BEGIN');
 
       const query = `
-        INSERT INTO customers (name, contact_info, branch_id)
-        VALUES ($1, $2, $3)
+        INSERT INTO customers (
+          name, business_name, cuit, iva_condition, fiscal_address, contact_info, branch_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING *`;
-      const { rows } = await client.query(query, [name, fullContactInfo, branch_id]);
+      const { rows } = await client.query(query, [
+        name,
+        business_name || null,
+        cuit || null,
+        iva_condition || null,
+        fiscal_address || null,
+        fullContactInfo,
+        branch_id,
+      ]);
       const customer = rows[0];
 
-      // Crear cuenta corriente inicial con balance 0 y el límite de días
-      await client.query(`
-        INSERT INTO customer_accounts (customer_id, current_balance, overdue_days_limit)
-        VALUES ($1, 0, $2)`,
+      await client.query(
+        `INSERT INTO customer_accounts (customer_id, current_balance, overdue_days_limit)
+         VALUES ($1, 0, $2)`,
         [customer.id, overdue_days_limit || 1]
       );
 
@@ -59,16 +83,39 @@ class ClientsService {
   }
 
   async update(id, data, branchId) {
-    const { name, contact_info, overdue_days_limit } = data;
+    const {
+      name,
+      contact_info,
+      overdue_days_limit,
+      business_name,
+      cuit,
+      iva_condition,
+      fiscal_address,
+    } = data;
     const client = await db.connect();
+
     try {
       await client.query('BEGIN');
 
       let customerQuery = `
         UPDATE customers
-        SET name = $1, contact_info = $2, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $3 AND deleted_at IS NULL`;
-      const customerParams = [name, contact_info, id];
+        SET name = $1,
+            contact_info = $2,
+            business_name = $3,
+            cuit = $4,
+            iva_condition = $5,
+            fiscal_address = $6,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $7 AND deleted_at IS NULL`;
+      const customerParams = [
+        name,
+        contact_info,
+        business_name || null,
+        cuit || null,
+        iva_condition || null,
+        fiscal_address || null,
+        id,
+      ];
 
       if (branchId) {
         customerParams.push(branchId);
@@ -77,14 +124,12 @@ class ClientsService {
 
       customerQuery += ' RETURNING *';
       const { rows } = await client.query(customerQuery, customerParams);
-      
       if (rows.length === 0) throw { status: 404, message: 'Cliente no encontrado' };
 
-      // Actualizar límite en la cuenta
-      await client.query(`
-        UPDATE customer_accounts 
-        SET overdue_days_limit = $1, updated_at = CURRENT_TIMESTAMP
-        WHERE customer_id = $2`,
+      await client.query(
+        `UPDATE customer_accounts
+         SET overdue_days_limit = $1, updated_at = CURRENT_TIMESTAMP
+         WHERE customer_id = $2`,
         [overdue_days_limit || 1, id]
       );
 

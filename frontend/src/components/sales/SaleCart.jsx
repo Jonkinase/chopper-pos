@@ -1,11 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ShoppingCart, CheckCircle2, Zap, Clock, ChevronDown, Trash2 } from 'lucide-react';
+import { Search, ShoppingCart, CheckCircle2, Zap, Clock, ChevronDown, Trash2, Receipt, FileWarning } from 'lucide-react';
 import CartItem from './CartItem';
 import ProductInputModal from './ProductInputModal';
 import FastItemModal from './FastItemModal';
 import { formatCurrency } from '../../utils/formatters';
 import api from '../../api/api';
 import toast from 'react-hot-toast';
+
+const IVA_OPTIONS = [
+  'Consumidor Final',
+  'Responsable Inscripto',
+  'Monotributista',
+  'Exento',
+];
+
+const EMPTY_RECEIVER = {
+  name: '',
+  business_name: '',
+  cuit: '',
+  iva_condition: 'Consumidor Final',
+  fiscal_address: '',
+};
 
 const SaleCart = ({
   activeBranch,
@@ -21,18 +36,18 @@ const SaleCart = ({
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showFastItem, setShowFastItem] = useState(false);
-  
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState('');
   const [paymentMethod, setPaymentMethod] = useState(defaultPayment);
   const [observations, setObservaciones] = useState('');
-  const [mobileTab, setMobileTab] = useState('productos'); // 'productos' | 'carrito'
-
+  const [mobileTab, setMobileTab] = useState('productos');
   const [heldSales, setHeldSales] = useState([]);
   const [showHeldSalesMenu, setShowHeldSalesMenu] = useState(false);
+  const [emitInvoice, setEmitInvoice] = useState(false);
+  const [invoiceType, setInvoiceType] = useState('B');
+  const [billingReceiver, setBillingReceiver] = useState(EMPTY_RECEIVER);
   const heldSalesMenuRef = useRef(null);
 
   useEffect(() => {
@@ -45,28 +60,95 @@ const SaleCart = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Load held sales
   useEffect(() => {
     if (!activeBranch) return;
     const stored = localStorage.getItem(`chopper_held_sales_${activeBranch}`);
     if (stored) {
       try {
         setHeldSales(JSON.parse(stored));
-      } catch (e) {
-        console.error('Error parsing held sales', e);
+      } catch (error) {
+        console.error('Error parsing held sales', error);
       }
     }
   }, [activeBranch]);
 
-  // Save held sales
   useEffect(() => {
     if (!activeBranch) return;
     localStorage.setItem(`chopper_held_sales_${activeBranch}`, JSON.stringify(heldSales));
   }, [heldSales, activeBranch]);
 
+  useEffect(() => {
+    if (!activeBranch) return;
+    const loadData = async () => {
+      try {
+        const [prodRes, clientRes] = await Promise.all([
+          api.get(`/products?sucursal_id=${activeBranch}`),
+          api.get(`/clients?branch_id=${activeBranch}`),
+        ]);
+        setProducts(prodRes.data.data);
+        setFilteredProducts(prodRes.data.data);
+        setClients(clientRes.data.data);
+      } catch (error) {
+        toast.error('Error al cargar datos del POS');
+      }
+    };
+    loadData();
+  }, [activeBranch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!searchQuery) {
+        setFilteredProducts(products);
+        return;
+      }
+      const lower = searchQuery.toLowerCase();
+      setFilteredProducts(products.filter((product) => product.name.toLowerCase().includes(lower)));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, products]);
+
+  const selectedClientData = clients.find((client) => client.id === selectedClient);
+
+  useEffect(() => {
+    if (!selectedClientData) {
+      setBillingReceiver((prev) => ({
+        ...prev,
+        name: prev.name || '',
+        business_name: prev.business_name || '',
+        cuit: prev.cuit || '',
+        iva_condition: prev.iva_condition || 'Consumidor Final',
+        fiscal_address: prev.fiscal_address || '',
+      }));
+      return;
+    }
+
+    setBillingReceiver((prev) => ({
+      ...prev,
+      name: selectedClientData.name || prev.name || '',
+      business_name: selectedClientData.business_name || selectedClientData.name || prev.business_name || '',
+      cuit: selectedClientData.cuit || prev.cuit || '',
+      iva_condition: selectedClientData.iva_condition || prev.iva_condition || 'Consumidor Final',
+      fiscal_address: selectedClientData.fiscal_address || prev.fiscal_address || '',
+    }));
+  }, [selectedClientData]);
+
+  const handleAddToCart = (item) => {
+    setCart((prev) => {
+      if (item.producto_id) {
+        const existing = prev.findIndex((entry) => entry.producto_id === item.producto_id);
+        if (existing >= 0) {
+          const newCart = [...prev];
+          newCart[existing] = item;
+          return newCart;
+        }
+      }
+      return [...prev, item];
+    });
+    toast.success('Agregado al carrito');
+  };
+
   const handleHoldSale = () => {
     if (cart.length === 0) return;
-    
     const newHold = {
       id: Date.now().toString(),
       name: `Venta #${heldSales.length + 1}`,
@@ -74,14 +156,20 @@ const SaleCart = ({
       selectedClient,
       paymentMethod,
       observations,
-      timestamp: new Date().toISOString()
+      emitInvoice,
+      invoiceType,
+      billingReceiver,
+      timestamp: new Date().toISOString(),
     };
 
-    setHeldSales(prev => [...prev, newHold]);
+    setHeldSales((prev) => [...prev, newHold]);
     setCart([]);
     setSelectedClient('');
     setPaymentMethod(defaultPayment);
     setObservaciones('');
+    setEmitInvoice(false);
+    setInvoiceType('B');
+    setBillingReceiver(EMPTY_RECEIVER);
     toast.success('Venta puesta en espera');
   };
 
@@ -94,91 +182,47 @@ const SaleCart = ({
         selectedClient,
         paymentMethod,
         observations,
-        timestamp: new Date().toISOString()
+        emitInvoice,
+        invoiceType,
+        billingReceiver,
+        timestamp: new Date().toISOString(),
       };
-      setHeldSales(prev => [...prev.filter(s => s.id !== heldSale.id), currentHold]);
+      setHeldSales((prev) => [...prev.filter((sale) => sale.id !== heldSale.id), currentHold]);
       toast.success('Venta actual puesta en espera');
     } else {
-      setHeldSales(prev => prev.filter(s => s.id !== heldSale.id));
+      setHeldSales((prev) => prev.filter((sale) => sale.id !== heldSale.id));
     }
 
     setCart(heldSale.cart || []);
     setSelectedClient(heldSale.selectedClient || '');
     setPaymentMethod(heldSale.paymentMethod || defaultPayment);
     setObservaciones(heldSale.observations || '');
+    setEmitInvoice(Boolean(heldSale.emitInvoice));
+    setInvoiceType(heldSale.invoiceType || 'B');
+    setBillingReceiver(heldSale.billingReceiver || EMPTY_RECEIVER);
     setShowHeldSalesMenu(false);
   };
 
-  const handleDiscardHeldSale = (e, id) => {
-    e.stopPropagation();
-    setHeldSales(prev => prev.filter(s => s.id !== id));
-  };
-
-  // Load Products & Clients
-  useEffect(() => {
-    if (!activeBranch) return;
-    const loadData = async () => {
-      try {
-        const [prodRes, clientRes] = await Promise.all([
-          api.get(`/products?sucursal_id=${activeBranch}`),
-          api.get(`/clients?branch_id=${activeBranch}`)
-        ]);
-        setProducts(prodRes.data.data);
-        setFilteredProducts(prodRes.data.data);
-        setClients(clientRes.data.data);
-      } catch (error) {
-        toast.error('Error al cargar datos del POS');
-      }
-    };
-    loadData();
-  }, [activeBranch]);
-
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!searchQuery) {
-        setFilteredProducts(products);
-        return;
-      }
-      const lower = searchQuery.toLowerCase();
-      setFilteredProducts(
-        products.filter(p => p.name.toLowerCase().includes(lower))
-      );
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery, products]);
-
-  const handleAddToCart = (item) => {
-    setCart(prev => {
-      if (item.producto_id) {
-        const existing = prev.findIndex(p => p.producto_id === item.producto_id);
-        if (existing >= 0) {
-          const newCart = [...prev];
-          newCart[existing] = item;
-          return newCart;
-        }
-      }
-      return [...prev, item];
-    });
-    toast.success('Agregado al carrito');
+  const handleDiscardHeldSale = (event, id) => {
+    event.stopPropagation();
+    setHeldSales((prev) => prev.filter((sale) => sale.id !== id));
   };
 
   const removeFromCart = (index) => {
-    setCart(prev => prev.filter((_, i) => i !== index));
+    setCart((prev) => prev.filter((_, i) => i !== index));
   };
 
   const updateCartQuantity = (index, newQty) => {
-    const val = parseFloat(newQty);
-    if (isNaN(val) || val <= 0) return;
+    const value = parseFloat(newQty);
+    if (Number.isNaN(value) || value <= 0) return;
 
-    setCart(prev => {
+    setCart((prev) => {
       const newCart = [...prev];
       const item = { ...newCart[index] };
-      item.cantidad = val;
-      
+      item.cantidad = value;
+
       if (item.producto_id) {
-        // Recalculate based on product rules
-        const product = products.find(p => p.id === item.producto_id);
+        const product = products.find((entry) => entry.id === item.producto_id);
         if (product) {
           let price = parseFloat(product.retail_price);
           item.tipo_precio = 'menudeo';
@@ -189,7 +233,7 @@ const SaleCart = ({
           item.precio_unitario = price;
         }
       }
-      
+
       item.subtotal = parseFloat((item.cantidad * item.precio_unitario).toFixed(2));
       newCart[index] = item;
       return newCart;
@@ -198,26 +242,61 @@ const SaleCart = ({
 
   const total = cart.reduce((acc, item) => acc + item.subtotal, 0);
 
+  const validateBilling = () => {
+    if (!emitInvoice) return true;
+    const displayName = billingReceiver.business_name || billingReceiver.name;
+
+    if (!displayName) {
+      toast.error('Completá al menos nombre o razón social del receptor.');
+      return false;
+    }
+
+    if (invoiceType === 'A' && (!billingReceiver.cuit || !billingReceiver.iva_condition || !billingReceiver.fiscal_address)) {
+      toast.error('Factura A requiere CUIT, condición IVA y domicilio fiscal.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const resetBillingForm = () => {
+    setEmitInvoice(false);
+    setInvoiceType('B');
+    setBillingReceiver(EMPTY_RECEIVER);
+  };
+
   const handleSubmit = () => {
     if (cart.length === 0) return toast.error('El carrito está vacío');
     if (allowAccount && paymentMethod === 'cuenta_corriente' && requireClientForAccount && !selectedClient) {
       return toast.error('Seleccione un cliente para enviar a cuenta corriente');
     }
+    if (!validateBilling()) return;
 
     onSubmit({
       cliente_id: selectedClient || null,
       tipo_pago: paymentMethod,
       observaciones: observations,
       items: cart,
-      total
+      total,
+      billing: emitInvoice
+        ? {
+            emit: true,
+            invoice_type: invoiceType,
+            receiver: billingReceiver,
+          }
+        : undefined,
+      onSuccess: () => {
+        setCart([]);
+        setSelectedClient('');
+        setPaymentMethod(defaultPayment);
+        setObservaciones('');
+        resetBillingForm();
+      },
     });
   };
 
-  const selectedClientData = clients.find(c => c.id === selectedClient);
-
   return (
     <div className="flex flex-col h-full gap-4">
-      {/* MOBILE TABS */}
       <div className="lg:hidden flex p-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
         <button
           onClick={() => setMobileTab('productos')}
@@ -230,16 +309,11 @@ const SaleCart = ({
           className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors flex items-center justify-center space-x-2 ${mobileTab === 'carrito' ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'}`}
         >
           <span>Carrito</span>
-          {cart.length > 0 && (
-            <span className="bg-white text-primary-600 px-2 py-0.5 rounded-full text-xs">
-              {cart.length}
-            </span>
-          )}
+          {cart.length > 0 && <span className="bg-white text-primary-600 px-2 py-0.5 rounded-full text-xs">{cart.length}</span>}
         </button>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6 h-full min-h-0">
-        {/* LEFT COLUMN: BUSCADOR */}
         <div className={`flex-1 flex-col min-h-0 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden ${mobileTab === 'productos' ? 'flex' : 'hidden lg:flex'}`}>
           <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -247,7 +321,7 @@ const SaleCart = ({
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Buscar productos..."
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
               />
@@ -260,10 +334,10 @@ const SaleCart = ({
               <span>Item Rápido</span>
             </button>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 content-start">
-            {filteredProducts.map(prod => (
-              <div 
+            {filteredProducts.map((prod) => (
+              <div
                 key={prod.id}
                 onClick={() => setSelectedProduct(prod)}
                 className="bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:border-primary-500 rounded-xl p-3 cursor-pointer transition-all hover:-translate-y-1 flex flex-col justify-between"
@@ -277,179 +351,226 @@ const SaleCart = ({
                 </div>
                 <div>
                   <p className="text-lg font-bold text-primary-400">{formatCurrency(prod.retail_price)}</p>
-                  {prod.wholesale_price && (
-                    <p className="text-[10px] text-slate-600 dark:text-slate-400">Mayoreo: {formatCurrency(prod.wholesale_price)}</p>
-                  )}
+                  {prod.wholesale_price && <p className="text-[10px] text-slate-600 dark:text-slate-400">Mayoreo: {formatCurrency(prod.wholesale_price)}</p>}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* RIGHT COLUMN: CARRITO Y CIERRE */}
-        <div className={`w-full lg:w-[400px] flex-col min-h-0 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden ${mobileTab === 'carrito' ? 'flex' : 'hidden lg:flex'}`}>
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <ShoppingCart className="w-5 h-5 text-primary-500" />
-            <h2 className="font-bold text-slate-900 dark:text-slate-100">Resumen de Operación</h2>
-          </div>
-          
-          {/* Held Sales Dropdown */}
-          <div className="relative" ref={heldSalesMenuRef}>
-            <button
-              onClick={() => setShowHeldSalesMenu(!showHeldSalesMenu)}
-              disabled={heldSales.length === 0}
-              className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Clock className="w-4 h-4" />
-              <span>En espera</span>
-              {heldSales.length > 0 && (
-                <span className="bg-yellow-500 text-yellow-900 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                  {heldSales.length}
-                </span>
-              )}
-              <ChevronDown className="w-4 h-4 ml-1" />
-            </button>
-
-            {showHeldSalesMenu && heldSales.length > 0 && (
-              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
-                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
-                  <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ventas en espera</h3>
-                </div>
-                <div className="max-h-64 overflow-y-auto">
-                  {heldSales.map(sale => (
-                    <div 
-                      key={sale.id}
-                      onClick={() => handleResumeSale(sale)}
-                      className="p-3 border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors flex justify-between items-center group"
-                    >
-                      <div className="overflow-hidden">
-                        <p className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">{sale.name}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {sale.cart.length} ítems • {formatCurrency(sale.cart.reduce((a, b) => a + b.subtotal, 0))}
-                        </p>
-                      </div>
-                      <button 
-                        onClick={(e) => handleDiscardHeldSale(e, sale.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                        title="Descartar venta en espera"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Lista de Carrito */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-600 dark:text-slate-400">
-              <ShoppingCart className="w-12 h-12 mb-2 opacity-20" />
-              <p className="text-sm font-medium">El carrito está vacío</p>
+        <div className={`w-full lg:w-[420px] flex-col min-h-0 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden ${mobileTab === 'carrito' ? 'flex' : 'hidden lg:flex'}`}>
+          <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <ShoppingCart className="w-5 h-5 text-primary-500" />
+              <h2 className="font-bold text-slate-900 dark:text-slate-100">Resumen de Operación</h2>
             </div>
-          ) : (
-            cart.map((item, idx) => (
-              <CartItem 
-                key={idx} 
-                item={item} 
-                onRemove={() => removeFromCart(idx)} 
-                onUpdate={(val) => updateCartQuantity(idx, val)}
-              />
-            ))
-          )}
-        </div>
 
-        {/* Panel de Cierre */}
-        <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-t border-slate-200 dark:border-slate-700 space-y-4">
-          
-          <div className="space-y-3">
-            <select
-              value={selectedClient}
-              onChange={(e) => setSelectedClient(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 outline-none transition-all"
-            >
-              <option value="">Consumidor Final</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <div className="relative" ref={heldSalesMenuRef}>
+              <button
+                onClick={() => setShowHeldSalesMenu(!showHeldSalesMenu)}
+                disabled={heldSales.length === 0}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Clock className="w-4 h-4" />
+                <span>En espera</span>
+                {heldSales.length > 0 && <span className="bg-yellow-500 text-yellow-900 text-[10px] px-1.5 py-0.5 rounded-full font-bold">{heldSales.length}</span>}
+                <ChevronDown className="w-4 h-4 ml-1" />
+              </button>
 
-            {allowAccount && (
-              <div className="flex p-1 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                <button
-                  onClick={() => setPaymentMethod('contado')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${paymentMethod === 'contado' ? 'bg-primary-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'}`}
-                >
-                  CONTADO
-                </button>
-                <button
-                  onClick={() => setPaymentMethod('cuenta_corriente')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${paymentMethod === 'cuenta_corriente' ? 'bg-warning text-yellow-900 bg-yellow-500' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'}`}
-                >
-                  CTA. CORRIENTE
-                </button>
-              </div>
-            )}
-
-            {allowAccount && paymentMethod === 'cuenta_corriente' && selectedClientData && (
-              <div className="text-xs text-yellow-500 bg-yellow-900/20 p-2 rounded-lg border border-yellow-900/50">
-                Se cargará deuda a la cuenta de <b>{selectedClientData.name}</b>
-              </div>
-            )}
-            {allowAccount && paymentMethod === 'cuenta_corriente' && !selectedClientData && requireClientForAccount && (
-              <div className="text-xs text-red-400 bg-red-900/20 p-2 rounded-lg border border-red-900/50">
-                Debe seleccionar un cliente.
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-between items-end pt-2 border-t border-slate-200 dark:border-slate-700">
-            <span className="text-slate-700 dark:text-slate-300 font-medium">Total:</span>
-            <span className="text-3xl font-black text-slate-900 dark:text-white">{formatCurrency(total)}</span>
-          </div>
-
-          <div className="space-y-2">
-            <button
-              onClick={handleSubmit}
-              disabled={cart.length === 0 || isSubmitting || (allowAccount && paymentMethod === 'cuenta_corriente' && requireClientForAccount && !selectedClient)}
-              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? (
-                <span>Procesando...</span>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span>{submitLabel}</span>
-                </>
+              {showHeldSalesMenu && heldSales.length > 0 && (
+                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                  <div className="px-4 py-2 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
+                    <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ventas en espera</h3>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {heldSales.map((sale) => (
+                      <div
+                        key={sale.id}
+                        onClick={() => handleResumeSale(sale)}
+                        className="p-3 border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors flex justify-between items-center group"
+                      >
+                        <div className="overflow-hidden">
+                          <p className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">{sale.name}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {sale.cart.length} ítems • {formatCurrency(sale.cart.reduce((acc, item) => acc + item.subtotal, 0))}
+                          </p>
+                        </div>
+                        <button
+                          onClick={(event) => handleDiscardHeldSale(event, sale.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                          title="Descartar venta en espera"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
-            </button>
-            <button
-              onClick={handleHoldSale}
-              disabled={cart.length === 0 || isSubmitting}
-              className="w-full py-2 bg-yellow-500 hover:bg-yellow-400 text-yellow-950 font-bold rounded-xl transition-all shadow-md flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Clock className="w-4 h-4" />
-              <span>Poner en espera</span>
-            </button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {cart.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-600 dark:text-slate-400">
+                <ShoppingCart className="w-12 h-12 mb-2 opacity-20" />
+                <p className="text-sm font-medium">El carrito está vacío</p>
+              </div>
+            ) : (
+              cart.map((item, idx) => (
+                <CartItem key={idx} item={item} onRemove={() => removeFromCart(idx)} onUpdate={(value) => updateCartQuantity(idx, value)} />
+              ))
+            )}
+          </div>
+
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-t border-slate-200 dark:border-slate-700 space-y-4 overflow-y-auto">
+            <div className="space-y-3">
+              <select
+                value={selectedClient}
+                onChange={(event) => setSelectedClient(event.target.value)}
+                className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 outline-none transition-all"
+              >
+                <option value="">Consumidor Final</option>
+                {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+              </select>
+
+              {allowAccount && (
+                <div className="flex p-1 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                  <button
+                    onClick={() => setPaymentMethod('contado')}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${paymentMethod === 'contado' ? 'bg-primary-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'}`}
+                  >
+                    CONTADO
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod('cuenta_corriente')}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${paymentMethod === 'cuenta_corriente' ? 'bg-yellow-500 text-yellow-900' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'}`}
+                  >
+                    CTA. CORRIENTE
+                  </button>
+                </div>
+              )}
+
+              {allowAccount && paymentMethod === 'cuenta_corriente' && selectedClientData && (
+                <div className="text-xs text-yellow-500 bg-yellow-900/20 p-2 rounded-lg border border-yellow-900/50">
+                  Se cargará deuda a la cuenta de <b>{selectedClientData.name}</b>
+                </div>
+              )}
+              {allowAccount && paymentMethod === 'cuenta_corriente' && !selectedClientData && requireClientForAccount && (
+                <div className="text-xs text-red-400 bg-red-900/20 p-2 rounded-lg border border-red-900/50">
+                  Debe seleccionar un cliente.
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40 p-3 space-y-3">
+              <button
+                type="button"
+                onClick={() => setEmitInvoice((prev) => !prev)}
+                className={`w-full flex items-center justify-between rounded-lg px-3 py-2 border transition-colors ${emitInvoice ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'}`}
+              >
+                <span className="flex items-center gap-2 font-semibold text-sm">
+                  <Receipt className="w-4 h-4" />
+                  Emitir factura
+                </span>
+                <span className={`h-5 w-10 rounded-full transition-colors ${emitInvoice ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                  <span className={`block h-5 w-5 rounded-full bg-white transition-transform ${emitInvoice ? 'translate-x-5' : 'translate-x-0'}`}></span>
+                </span>
+              </button>
+
+              {emitInvoice && (
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceType('A')}
+                      className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${invoiceType === 'A' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-300' : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'}`}
+                    >
+                      Factura A
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceType('B')}
+                      className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${invoiceType === 'B' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-300' : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'}`}
+                    >
+                      Factura B
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    <input
+                      type="text"
+                      value={billingReceiver.business_name}
+                      onChange={(event) => setBillingReceiver((prev) => ({ ...prev, business_name: event.target.value }))}
+                      placeholder="Razón social"
+                      className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm"
+                    />
+                    <input
+                      type="text"
+                      value={billingReceiver.name}
+                      onChange={(event) => setBillingReceiver((prev) => ({ ...prev, name: event.target.value }))}
+                      placeholder="Nombre de contacto / receptor"
+                      className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm"
+                    />
+                    <input
+                      type="text"
+                      value={billingReceiver.cuit}
+                      onChange={(event) => setBillingReceiver((prev) => ({ ...prev, cuit: event.target.value }))}
+                      placeholder="CUIT"
+                      className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm"
+                    />
+                    <select
+                      value={billingReceiver.iva_condition}
+                      onChange={(event) => setBillingReceiver((prev) => ({ ...prev, iva_condition: event.target.value }))}
+                      className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm"
+                    >
+                      {IVA_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                    <input
+                      type="text"
+                      value={billingReceiver.fiscal_address}
+                      onChange={(event) => setBillingReceiver((prev) => ({ ...prev, fiscal_address: event.target.value }))}
+                      placeholder="Domicilio fiscal"
+                      className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm"
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-2 text-[11px] text-amber-700 dark:text-amber-300 flex gap-2">
+                    <FileWarning className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>Los precios del POS se enviarán a ARCA como importes netos al 21%, manteniendo el total final cobrado exactamente igual.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-end pt-2 border-t border-slate-200 dark:border-slate-700">
+              <span className="text-slate-700 dark:text-slate-300 font-medium">Total:</span>
+              <span className="text-3xl font-black text-slate-900 dark:text-white">{formatCurrency(total)}</span>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={handleSubmit}
+                disabled={cart.length === 0 || isSubmitting || (allowAccount && paymentMethod === 'cuenta_corriente' && requireClientForAccount && !selectedClient)}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? <span>Procesando...</span> : <><CheckCircle2 className="w-5 h-5" /><span>{submitLabel}</span></>}
+              </button>
+              <button
+                onClick={handleHoldSale}
+                disabled={cart.length === 0 || isSubmitting}
+                className="w-full py-2 bg-yellow-500 hover:bg-yellow-400 text-yellow-950 font-bold rounded-xl transition-all shadow-md flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Clock className="w-4 h-4" />
+                <span>Poner en espera</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-      </div>
 
-      <ProductInputModal 
-        isOpen={!!selectedProduct} 
-        product={selectedProduct} 
-        onClose={() => setSelectedProduct(null)} 
-        onAdd={handleAddToCart}
-      />
-
-      <FastItemModal
-        isOpen={showFastItem}
-        onClose={() => setShowFastItem(false)}
-        onAdd={handleAddToCart}
-      />
+      <ProductInputModal isOpen={!!selectedProduct} product={selectedProduct} onClose={() => setSelectedProduct(null)} onAdd={handleAddToCart} />
+      <FastItemModal isOpen={showFastItem} onClose={() => setShowFastItem(false)} onAdd={handleAddToCart} />
     </div>
   );
 };
