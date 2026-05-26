@@ -29,6 +29,8 @@ class ConfigController {
         'arca_emitter_cuit',
         'arca_emitter_address',
         'arca_emitter_iva_condition',
+        'arca_emitter_iibb',
+        'arca_emitter_activity_start_date',
         'prices_include_vat',
       ];
       const updates = {};

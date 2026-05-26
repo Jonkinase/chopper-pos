@@ -25,6 +25,8 @@ const ConfigPage = () => {
     arca_emitter_cuit: '',
     arca_emitter_address: '',
     arca_emitter_iva_condition: '',
+    arca_emitter_iibb: '',
+    arca_emitter_activity_start_date: '',
     prices_include_vat: 'true',
   });
 
@@ -51,6 +53,8 @@ const ConfigPage = () => {
       arca_emitter_cuit: config.arca_emitter_cuit || '',
       arca_emitter_address: config.arca_emitter_address || '',
       arca_emitter_iva_condition: config.arca_emitter_iva_condition || '',
+      arca_emitter_iibb: config.arca_emitter_iibb || '',
+      arca_emitter_activity_start_date: config.arca_emitter_activity_start_date || '',
       prices_include_vat: config.prices_include_vat || 'true',
     });
   }, [config]);
@@ -206,6 +210,8 @@ const ConfigPage = () => {
           {renderField('CUIT Emisor', 'arca_emitter_cuit', '20-00000000-0')}
           {renderField('Dirección Emisor', 'arca_emitter_address', 'Domicilio fiscal del emisor')}
           {renderField('IVA Emisor', 'arca_emitter_iva_condition', 'Responsable Inscripto')}
+          {renderField('Ingresos Brutos', 'arca_emitter_iibb', 'Número de IIBB')}
+          {renderField('Inicio de Actividades', 'arca_emitter_activity_start_date', '2020-01-01', 'date')}
         </div>
         <div className="px-6 pb-6">
           <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-4 text-sm text-emerald-800 dark:text-emerald-300">
