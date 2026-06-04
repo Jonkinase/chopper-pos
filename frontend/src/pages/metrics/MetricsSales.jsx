@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/authStore';
 import MetricsFilters from '../../components/metrics/MetricsFilters';
 import { SkeletonChart } from '../../components/metrics/Skeletons';
 import { formatCurrency } from '../../utils/formatters';
+import { getMetricsQueryParams, isCustomRangeComplete } from '../../utils/metricsFilters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from 'recharts';
 
 const COLORS = ['#3b66f5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -11,20 +12,29 @@ const COLORS = ['#3b66f5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 const MetricsSales = () => {
   const { activeBranch, user } = useAuthStore();
   const [period, setPeriod] = useState('mes');
+  const [customRange, setCustomRange] = useState({ from: '', to: '' });
   const [branchFilter, setBranchFilter] = useState(user.role === 'admin' ? 'all' : activeBranch);
   const [branches, setBranches] = useState([]);
-  
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = async () => {
+    if (!isCustomRangeComplete(period, customRange)) {
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const endpoint = branchFilter === 'all' && user.role === 'admin' 
-        ? `/metrics/sales?sucursal_id=all&periodo=${period}`
-        : `/metrics/sales?sucursal_id=${branchFilter}&periodo=${period}`;
-      
-      const res = await api.get(endpoint);
+      const params = {
+        sucursal_id: branchFilter === 'all' && user.role === 'admin' ? 'all' : branchFilter,
+        ...getMetricsQueryParams({
+          period,
+          dateFrom: customRange.from,
+          dateTo: customRange.to,
+        }),
+      };
+
+      const res = await api.get('/metrics/sales', { params });
       setData(res.data.data);
     } catch (error) {
       console.error(error);
@@ -35,19 +45,20 @@ const MetricsSales = () => {
 
   useEffect(() => {
     if (user.role === 'admin') {
-      api.get('/branches').then(res => setBranches(res.data.data));
+      api.get('/branches').then((res) => setBranches(res.data.data));
     }
   }, [user.role]);
 
   useEffect(() => {
-    if (branchFilter) fetchData();
-  }, [period, branchFilter]);
+    if (branchFilter && isCustomRangeComplete(period, customRange)) {
+      fetchData();
+    }
+  }, [period, branchFilter, customRange.from, customRange.to]);
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
-      // Para PieChart, el label suele venir en payload[0].name si label no está definido
       const displayLabel = label || payload[0].name || payload[0].payload.label;
-      
+
       return (
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl shadow-xl border-l-4" style={{ borderLeftColor: payload[0].color || payload[0].fill }}>
           <p className="text-slate-900 dark:text-slate-100 font-bold mb-1 capitalize">
@@ -66,10 +77,16 @@ const MetricsSales = () => {
 
   return (
     <div className="space-y-6">
-      <MetricsFilters 
-        period={period} setPeriod={setPeriod}
-        branchFilter={branchFilter} setBranchFilter={setBranchFilter}
-        branches={branches} onRefresh={fetchData} isLoading={isLoading}
+      <MetricsFilters
+        period={period}
+        setPeriod={setPeriod}
+        customRange={customRange}
+        setCustomRange={setCustomRange}
+        branchFilter={branchFilter}
+        setBranchFilter={setBranchFilter}
+        branches={branches}
+        onRefresh={fetchData}
+        isLoading={isLoading}
       />
 
       {isLoading || !data ? (
@@ -87,7 +104,7 @@ const MetricsSales = () => {
                   <LineChart data={data.sales_by_day} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#2d2d2d" vertical={false} />
                     <XAxis dataKey="label" stroke="#888" fontSize={12} tickMargin={10} />
-                    <YAxis stroke="#888" fontSize={12} tickFormatter={(val) => `$${val/1000}k`} />
+                    <YAxis stroke="#888" fontSize={12} tickFormatter={(val) => `$${val / 1000}k`} />
                     <Tooltip content={<CustomTooltip />} />
                     <Line type="monotone" dataKey="value" name="Ventas" stroke="#3b66f5" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
                   </LineChart>
@@ -132,7 +149,7 @@ const MetricsSales = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#2d2d2d" vertical={false} />
                   <XAxis dataKey="label" stroke="#888" fontSize={12} tickFormatter={(val) => `${val}hs`} />
                   <YAxis stroke="#888" fontSize={12} allowDecimals={false} />
-                  <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} content={<CustomTooltip />} />
+                  <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<CustomTooltip />} />
                   <Bar dataKey="value" name="Transacciones" fill="#10b981" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

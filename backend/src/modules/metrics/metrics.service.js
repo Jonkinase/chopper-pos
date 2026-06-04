@@ -1,53 +1,139 @@
 const db = require('../../config/db');
 
 class MetricsService {
-  getPeriodDates(period) {
-    const now = new Date();
-    const start = new Date();
-    const prevStart = new Date();
-    const prevEnd = new Date();
-
-    switch(period) {
-      case 'hoy':
-        start.setHours(0,0,0,0);
-        prevStart.setDate(start.getDate() - 1);
-        prevStart.setHours(0,0,0,0);
-        prevEnd.setDate(start.getDate() - 1);
-        prevEnd.setHours(23,59,59,999);
-        break;
-      case 'semana':
-        start.setDate(now.getDate() - 7);
-        prevStart.setDate(start.getDate() - 7);
-        prevEnd.setDate(start.getDate());
-        break;
-      case 'mes':
-        start.setMonth(now.getMonth() - 1);
-        prevStart.setMonth(start.getMonth() - 1);
-        prevEnd.setMonth(start.getMonth());
-        break;
-      case 'año':
-        start.setFullYear(now.getFullYear() - 1);
-        prevStart.setFullYear(start.getFullYear() - 1);
-        prevEnd.setFullYear(start.getFullYear());
-        break;
-      default:
-        start.setHours(0,0,0,0);
-        prevStart.setDate(start.getDate() - 1);
-        prevStart.setHours(0,0,0,0);
-        prevEnd.setDate(start.getDate() - 1);
-        prevEnd.setHours(23,59,59,999);
-    }
-    return { start, now, prevStart, prevEnd };
+  _startOfDay(date) {
+    const value = new Date(date);
+    value.setHours(0, 0, 0, 0);
+    return value;
   }
 
-  async getDashboard(sucursalId, period) {
-    const { start, now, prevStart, prevEnd } = this.getPeriodDates(period);
+  _endOfDay(date) {
+    const value = new Date(date);
+    value.setHours(23, 59, 59, 999);
+    return value;
+  }
+
+  _startOfWeek(date) {
+    const value = this._startOfDay(date);
+    const day = value.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    value.setDate(value.getDate() + diff);
+    return value;
+  }
+
+  _startOfMonth(date) {
+    return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+  }
+
+  _startOfYear(date) {
+    return new Date(date.getFullYear(), 0, 1, 0, 0, 0, 0);
+  }
+
+  _parseDateInput(value, endOfDay = false) {
+    if (!value) return null;
+
+    const date = value instanceof Date
+      ? new Date(value)
+      : new Date(typeof value === 'string' && value.length === 10 ? `${value}T00:00:00` : value);
+
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    return endOfDay ? this._endOfDay(date) : this._startOfDay(date);
+  }
+
+  _buildPreviousRange(start, end) {
+    const duration = end.getTime() - start.getTime();
+    const prevEnd = new Date(start.getTime() - 1);
+    const prevStart = new Date(prevEnd.getTime() - duration);
+    return { prevStart, prevEnd };
+  }
+
+  _buildComparablePreviousPeriod(start, end, unit) {
+    const prevStart = new Date(start);
+    const prevEnd = new Date(end);
+
+    if (unit === 'week') {
+      prevStart.setDate(prevStart.getDate() - 7);
+      prevEnd.setDate(prevEnd.getDate() - 7);
+    }
+
+    if (unit === 'month') {
+      prevStart.setMonth(prevStart.getMonth() - 1);
+      prevEnd.setMonth(prevEnd.getMonth() - 1);
+    }
+
+    if (unit === 'year') {
+      prevStart.setFullYear(prevStart.getFullYear() - 1);
+      prevEnd.setFullYear(prevEnd.getFullYear() - 1);
+    }
+
+    return { prevStart, prevEnd };
+  }
+
+  getPeriodDates(period) {
+    const now = new Date();
+    let start;
+    let previousRange;
+
+    switch (period) {
+      case 'hoy':
+        start = this._startOfDay(now);
+        previousRange = {
+          prevStart: this._startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)),
+          prevEnd: this._endOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))
+        };
+        break;
+      case 'semana':
+        start = this._startOfWeek(now);
+        previousRange = this._buildComparablePreviousPeriod(start, now, 'week');
+        break;
+      case 'mes':
+        start = this._startOfMonth(now);
+        previousRange = this._buildComparablePreviousPeriod(start, now, 'month');
+        break;
+      case 'año':
+        start = this._startOfYear(now);
+        previousRange = this._buildComparablePreviousPeriod(start, now, 'year');
+        break;
+      default:
+        start = this._startOfDay(now);
+        previousRange = {
+          prevStart: this._startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)),
+          prevEnd: this._endOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))
+        };
+    }
+
+    return { start, now, ...previousRange };
+  }
+
+  resolveDateRange({ period, from, to }) {
+    if (from && to) {
+      const start = this._parseDateInput(from);
+      const end = this._parseDateInput(to, true);
+
+      if (!start || !end) {
+        throw new Error('Rango de fechas inválido');
+      }
+
+      if (start > end) {
+        throw new Error('La fecha desde no puede ser mayor que la fecha hasta');
+      }
+
+      return { start, now: end, ...this._buildPreviousRange(start, end) };
+    }
+
+    return this.getPeriodDates(period || 'hoy');
+  }
+
+  async getDashboard(sucursalId, range) {
+    const { start, now, prevStart, prevEnd } = this.resolveDateRange(range);
     const isAll = sucursalId === 'all';
-    const branchFilter = isAll ? '' : 'AND branch_id = $3';
+    const branchFilter = isAll ? '' : 'AND s.branch_id = $3';
     const params = [start, now];
     if (!isAll) params.push(sucursalId);
 
-    // Current Period Sales & Profit
     const currentStatsQuery = `
       SELECT 
         COALESCE(SUM(si.subtotal), 0) as total_amount, 
@@ -57,22 +143,21 @@ class MetricsService {
       JOIN sale_items si ON s.id = si.sale_id
       LEFT JOIN products p ON si.product_id = p.id
       WHERE s.created_at >= $1 AND s.created_at <= $2 AND s.status = 'completada' ${branchFilter}`;
-    
-    // Previous Period Stats
+
     const prevParams = [prevStart, prevEnd];
     if (!isAll) prevParams.push(sucursalId);
     const prevStatsQuery = `
       SELECT 
-        COALESCE(SUM(total), 0) as total_amount
-      FROM sales
-      WHERE created_at >= $1 AND created_at <= $2 AND status = 'completada' ${branchFilter}`;
+        COALESCE(SUM(si.subtotal), 0) as total_amount
+      FROM sales s
+      JOIN sale_items si ON s.id = si.sale_id
+      WHERE s.created_at >= $1 AND s.created_at <= $2 AND s.status = 'completada' ${branchFilter}`;
 
-    // Other Metrics
     const lowStockQuery = `
       SELECT COUNT(*) FROM inventory i
       JOIN products p ON i.product_id = p.id
       WHERE i.deleted_at IS NULL AND i.stock_actual <= 10 AND p.requires_stock = TRUE ${isAll ? '' : 'AND i.branch_id = $1'}`;
-    
+
     const accountsBalanceQuery = `
       SELECT COALESCE(SUM(ca.current_balance), 0) as total_debt
       FROM customer_accounts ca
@@ -90,15 +175,20 @@ class MetricsService {
     const newClientsRes = await db.query(newClientsQuery, isAll ? [start, now] : [start, now, sucursalId]);
 
     const current = currentRes.rows[0];
+    const currentTotal = parseFloat(current.total_amount);
+    const currentCount = parseInt(current.total_count);
+    const currentProfit = parseFloat(current.gross_profit);
     const prevAmount = parseFloat(prevRes.rows[0].total_amount);
-    const variation = prevAmount === 0 ? 100 : ((parseFloat(current.total_amount) - prevAmount) / prevAmount) * 100;
+    const variation = prevAmount === 0
+      ? (currentTotal === 0 ? 0 : 100)
+      : ((currentTotal - prevAmount) / prevAmount) * 100;
 
     return {
-      total_sales: parseFloat(current.total_amount),
-      total_count: parseInt(current.total_count),
-      gross_profit: parseFloat(current.gross_profit),
-      margin_pct: current.total_amount > 0 ? (parseFloat(current.gross_profit) / parseFloat(current.total_amount)) * 100 : 0,
-      ticket_promedio: current.total_count > 0 ? parseFloat(current.total_amount) / parseInt(current.total_count) : 0,
+      total_sales: currentTotal,
+      total_count: currentCount,
+      gross_profit: currentProfit,
+      margin_pct: currentTotal > 0 ? (currentProfit / currentTotal) * 100 : 0,
+      ticket_promedio: currentCount > 0 ? currentTotal / currentCount : 0,
       variation_pct: variation,
       low_stock_count: parseInt(lowStockRes.rows[0].count),
       total_debt: parseFloat(balanceRes.rows[0].total_debt),
@@ -112,7 +202,6 @@ class MetricsService {
     const params = [fechaDesde, fechaHasta];
     if (!isAll) params.push(sucursalId);
 
-    // Grouped by Day
     const byDayQuery = `
       SELECT DATE(s.created_at) as label, SUM(s.total) as value
       FROM sales s
@@ -120,7 +209,6 @@ class MetricsService {
       GROUP BY DATE(s.created_at)
       ORDER BY DATE(s.created_at) ASC`;
 
-    // Grouped by Hour
     const byHourQuery = `
       SELECT EXTRACT(HOUR FROM s.created_at) as label, COUNT(*) as value
       FROM sales s
@@ -128,7 +216,6 @@ class MetricsService {
       GROUP BY label
       ORDER BY label ASC`;
 
-    // By Payment Method
     const byPaymentQuery = `
       SELECT payment_method as label, SUM(total) as value
       FROM sales s
@@ -140,9 +227,9 @@ class MetricsService {
     const byPayment = await db.query(byPaymentQuery, params);
 
     return {
-      sales_by_day: byDay.rows.map(r => ({ ...r, value: parseFloat(r.value) })),
-      sales_by_hour: byHour.rows.map(r => ({ ...r, value: parseInt(r.value) })),
-      sales_by_payment: byPayment.rows.map(r => ({ ...r, value: parseFloat(r.value) }))
+      sales_by_day: byDay.rows.map((r) => ({ ...r, value: parseFloat(r.value) })),
+      sales_by_hour: byHour.rows.map((r) => ({ ...r, value: parseInt(r.value) })),
+      sales_by_payment: byPayment.rows.map((r) => ({ ...r, value: parseFloat(r.value) }))
     };
   }
 
@@ -152,7 +239,6 @@ class MetricsService {
     const params = [fechaDesde, fechaHasta];
     if (!isAll) params.push(sucursalId);
 
-    // Top 10 by Amount
     const topByAmountQuery = `
       SELECT p.name as label, SUM(si.subtotal) as value
       FROM sale_items si
@@ -163,7 +249,6 @@ class MetricsService {
       ORDER BY value DESC
       LIMIT 10`;
 
-    // Top 10 by Profitability
     const topByProfitQuery = `
       SELECT p.name as label, SUM(si.subtotal - (si.quantity * p.cost)) as value
       FROM sale_items si
@@ -174,7 +259,6 @@ class MetricsService {
       ORDER BY value DESC
       LIMIT 10`;
 
-    // By Type
     const byTypeQuery = `
       SELECT p.type as label, SUM(si.subtotal) as value
       FROM sale_items si
@@ -196,8 +280,7 @@ class MetricsService {
 
   async getClientMetrics(sucursalId, fechaDesde, fechaHasta) {
     const isAll = sucursalId === 'all';
-    
-    // Query 1: Top Clients by Spending
+
     const topClientsParams = [fechaDesde, fechaHasta];
     let topClientsBranchFilter = '';
     if (!isAll) {
@@ -214,7 +297,6 @@ class MetricsService {
       ORDER BY value DESC
       LIMIT 10`;
 
-    // Query 2: Top Debtors
     const topDebtParams = [];
     let topDebtBranchFilter = '';
     if (!isAll) {
@@ -234,15 +316,15 @@ class MetricsService {
     const topDebt = await db.query(topDebtQuery, topDebtParams);
 
     return {
-      top_clients_spending: topClients.rows.map(r => ({ ...r, value: parseFloat(r.value) })),
-      top_clients_debt: topDebt.rows.map(r => ({ ...r, value: parseFloat(r.value) }))
+      top_clients_spending: topClients.rows.map((r) => ({ ...r, value: parseFloat(r.value) })),
+      top_clients_debt: topDebt.rows.map((r) => ({ ...r, value: parseFloat(r.value) }))
     };
   }
 
   async getInventoryMetrics(sucursalId) {
     const isAll = sucursalId === 'all';
     const params = isAll ? [] : [sucursalId];
-    
+
     const valuationQuery = `
       SELECT b.name as label, SUM(i.stock_actual * p.cost) as value
       FROM inventory i

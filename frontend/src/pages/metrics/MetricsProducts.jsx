@@ -4,25 +4,35 @@ import { useAuthStore } from '../../store/authStore';
 import MetricsFilters from '../../components/metrics/MetricsFilters';
 import { SkeletonChart } from '../../components/metrics/Skeletons';
 import { formatCurrency } from '../../utils/formatters';
+import { getMetricsQueryParams, isCustomRangeComplete } from '../../utils/metricsFilters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const MetricsProducts = () => {
   const { activeBranch, user } = useAuthStore();
   const [period, setPeriod] = useState('mes');
+  const [customRange, setCustomRange] = useState({ from: '', to: '' });
   const [branchFilter, setBranchFilter] = useState(user.role === 'admin' ? 'all' : activeBranch);
   const [branches, setBranches] = useState([]);
-  
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = async () => {
+    if (!isCustomRangeComplete(period, customRange)) {
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const endpoint = branchFilter === 'all' && user.role === 'admin' 
-        ? `/metrics/products?sucursal_id=all&periodo=${period}`
-        : `/metrics/products?sucursal_id=${branchFilter}&periodo=${period}`;
-      
-      const res = await api.get(endpoint);
+      const params = {
+        sucursal_id: branchFilter === 'all' && user.role === 'admin' ? 'all' : branchFilter,
+        ...getMetricsQueryParams({
+          period,
+          dateFrom: customRange.from,
+          dateTo: customRange.to,
+        }),
+      };
+
+      const res = await api.get('/metrics/products', { params });
       setData(res.data.data);
     } catch (error) {
       console.error(error);
@@ -32,12 +42,14 @@ const MetricsProducts = () => {
   };
 
   useEffect(() => {
-    if (user.role === 'admin') api.get('/branches').then(res => setBranches(res.data.data));
+    if (user.role === 'admin') api.get('/branches').then((res) => setBranches(res.data.data));
   }, [user.role]);
 
   useEffect(() => {
-    if (branchFilter) fetchData();
-  }, [period, branchFilter]);
+    if (branchFilter && isCustomRangeComplete(period, customRange)) {
+      fetchData();
+    }
+  }, [period, branchFilter, customRange.from, customRange.to]);
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -57,10 +69,16 @@ const MetricsProducts = () => {
 
   return (
     <div className="space-y-6">
-      <MetricsFilters 
-        period={period} setPeriod={setPeriod}
-        branchFilter={branchFilter} setBranchFilter={setBranchFilter}
-        branches={branches} onRefresh={fetchData} isLoading={isLoading}
+      <MetricsFilters
+        period={period}
+        setPeriod={setPeriod}
+        customRange={customRange}
+        setCustomRange={setCustomRange}
+        branchFilter={branchFilter}
+        setBranchFilter={setBranchFilter}
+        branches={branches}
+        onRefresh={fetchData}
+        isLoading={isLoading}
       />
 
       {isLoading || !data ? (
@@ -76,9 +94,9 @@ const MetricsProducts = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart layout="vertical" data={data.top_products_amount} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#2d2d2d" horizontal={false} />
-                  <XAxis type="number" stroke="#888" fontSize={12} tickFormatter={(val) => `$${val/1000}k`} />
+                  <XAxis type="number" stroke="#888" fontSize={12} tickFormatter={(val) => `$${val / 1000}k`} />
                   <YAxis dataKey="label" type="category" stroke="#888" fontSize={11} width={120} tick={{ fill: '#d1d1d1' }} />
-                  <Tooltip cursor={{fill: '#2d2d2d'}} content={<CustomTooltip />} />
+                  <Tooltip cursor={{ fill: '#2d2d2d' }} content={<CustomTooltip />} />
                   <Bar dataKey="value" name="Ingresos" fill="#3b66f5" radius={[0, 4, 4, 0]} barSize={20} />
                 </BarChart>
               </ResponsiveContainer>
@@ -91,9 +109,9 @@ const MetricsProducts = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart layout="vertical" data={data.top_products_profit} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#2d2d2d" horizontal={false} />
-                  <XAxis type="number" stroke="#888" fontSize={12} tickFormatter={(val) => `$${val/1000}k`} />
+                  <XAxis type="number" stroke="#888" fontSize={12} tickFormatter={(val) => `$${val / 1000}k`} />
                   <YAxis dataKey="label" type="category" stroke="#888" fontSize={11} width={120} tick={{ fill: '#d1d1d1' }} />
-                  <Tooltip cursor={{fill: '#2d2d2d'}} content={<CustomTooltip />} />
+                  <Tooltip cursor={{ fill: '#2d2d2d' }} content={<CustomTooltip />} />
                   <Bar dataKey="value" name="Ganancia" fill="#10b981" radius={[0, 4, 4, 0]} barSize={20} />
                 </BarChart>
               </ResponsiveContainer>

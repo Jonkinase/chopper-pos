@@ -7,17 +7,24 @@ class MetricsController {
 
     if (user.role === 'admin') {
       return sucursal_id || 'all';
-    } else {
-      // Encargado solo su sucursal
-      return user.branch_id;
     }
+
+    return user.branch_id;
+  }
+
+  _getRange(req, defaultPeriod = 'mes') {
+    const { periodo, fecha_desde, fecha_hasta } = req.query;
+    return {
+      period: periodo || defaultPeriod,
+      from: fecha_desde,
+      to: fecha_hasta
+    };
   }
 
   async getDashboard(req, res, next) {
     try {
       const sucursalId = this._validateBranch(req);
-      const { periodo } = req.query;
-      const data = await metricsService.getDashboard(sucursalId, periodo || 'hoy');
+      const data = await metricsService.getDashboard(sucursalId, this._getRange(req, 'hoy'));
       res.json({ success: true, data });
     } catch (err) {
       next(err);
@@ -27,18 +34,8 @@ class MetricsController {
   async getSales(req, res, next) {
     try {
       const sucursalId = this._validateBranch(req);
-      const { periodo, fecha_desde, fecha_hasta } = req.query;
-      
-      let from = fecha_desde;
-      let to = fecha_hasta;
-
-      if (!from || !to) {
-        const dates = metricsService.getPeriodDates(periodo || 'mes');
-        from = dates.start;
-        to = dates.now;
-      }
-
-      const data = await metricsService.getSalesMetrics(sucursalId, from, to);
+      const range = metricsService.resolveDateRange(this._getRange(req));
+      const data = await metricsService.getSalesMetrics(sucursalId, range.start, range.now);
       res.json({ success: true, data });
     } catch (err) {
       next(err);
@@ -48,18 +45,8 @@ class MetricsController {
   async getProducts(req, res, next) {
     try {
       const sucursalId = this._validateBranch(req);
-      const { periodo, fecha_desde, fecha_hasta } = req.query;
-
-      let from = fecha_desde;
-      let to = fecha_hasta;
-
-      if (!from || !to) {
-        const dates = metricsService.getPeriodDates(periodo || 'mes');
-        from = dates.start;
-        to = dates.now;
-      }
-
-      const data = await metricsService.getProductMetrics(sucursalId, from, to);
+      const range = metricsService.resolveDateRange(this._getRange(req));
+      const data = await metricsService.getProductMetrics(sucursalId, range.start, range.now);
       res.json({ success: true, data });
     } catch (err) {
       next(err);
@@ -69,18 +56,8 @@ class MetricsController {
   async getClients(req, res, next) {
     try {
       const sucursalId = this._validateBranch(req);
-      const { periodo, fecha_desde, fecha_hasta } = req.query;
-
-      let from = fecha_desde;
-      let to = fecha_hasta;
-
-      if (!from || !to) {
-        const dates = metricsService.getPeriodDates(periodo || 'mes');
-        from = dates.start;
-        to = dates.now;
-      }
-
-      const data = await metricsService.getClientMetrics(sucursalId, from, to);
+      const range = metricsService.resolveDateRange(this._getRange(req));
+      const data = await metricsService.getClientMetrics(sucursalId, range.start, range.now);
       res.json({ success: true, data });
     } catch (err) {
       next(err);

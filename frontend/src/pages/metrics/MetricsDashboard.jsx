@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api/api';
 import { useAuthStore } from '../../store/authStore';
 import MetricsFilters from '../../components/metrics/MetricsFilters';
-import { SkeletonCard, SkeletonChart } from '../../components/metrics/Skeletons';
+import { SkeletonCard } from '../../components/metrics/Skeletons';
 import { formatCurrency } from '../../utils/formatters';
+import { getMetricsQueryParams, isCustomRangeComplete } from '../../utils/metricsFilters';
 import { TrendingUp, TrendingDown, DollarSign, Target, ShoppingCart, Users } from 'lucide-react';
 
 const KPICard = ({ title, value, icon: Icon, trend, prefix = '' }) => (
@@ -29,20 +30,29 @@ const KPICard = ({ title, value, icon: Icon, trend, prefix = '' }) => (
 const MetricsDashboard = () => {
   const { activeBranch, user } = useAuthStore();
   const [period, setPeriod] = useState('mes');
+  const [customRange, setCustomRange] = useState({ from: '', to: '' });
   const [branchFilter, setBranchFilter] = useState(user.role === 'admin' ? 'all' : activeBranch);
   const [branches, setBranches] = useState([]);
-  
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = async () => {
+    if (!isCustomRangeComplete(period, customRange)) {
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const endpoint = branchFilter === 'all' && user.role === 'admin' 
-        ? `/metrics/dashboard?sucursal_id=all&periodo=${period}`
-        : `/metrics/dashboard?sucursal_id=${branchFilter}&periodo=${period}`;
-      
-      const res = await api.get(endpoint);
+      const params = {
+        sucursal_id: branchFilter === 'all' && user.role === 'admin' ? 'all' : branchFilter,
+        ...getMetricsQueryParams({
+          period,
+          dateFrom: customRange.from,
+          dateTo: customRange.to,
+        }),
+      };
+
+      const res = await api.get('/metrics/dashboard', { params });
       setData(res.data.data);
     } catch (error) {
       console.error(error);
@@ -53,13 +63,15 @@ const MetricsDashboard = () => {
 
   useEffect(() => {
     if (user.role === 'admin') {
-      api.get('/branches').then(res => setBranches(res.data.data));
+      api.get('/branches').then((res) => setBranches(res.data.data));
     }
   }, [user.role]);
 
   useEffect(() => {
-    if (branchFilter) fetchData();
-  }, [period, branchFilter]);
+    if (branchFilter && isCustomRangeComplete(period, customRange)) {
+      fetchData();
+    }
+  }, [period, branchFilter, customRange.from, customRange.to]);
 
   return (
     <div className="space-y-6">
@@ -68,9 +80,11 @@ const MetricsDashboard = () => {
         <p className="text-sm text-slate-600 dark:text-slate-400">Resumen ejecutivo del período</p>
       </div>
 
-      <MetricsFilters 
-        period={period} 
+      <MetricsFilters
+        period={period}
         setPeriod={setPeriod}
+        customRange={customRange}
+        setCustomRange={setCustomRange}
         branchFilter={branchFilter}
         setBranchFilter={setBranchFilter}
         branches={branches}
@@ -87,34 +101,33 @@ const MetricsDashboard = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KPICard 
-            title="Ventas Totales" 
-            value={formatCurrency(data.total_sales).replace('$', '')} 
+          <KPICard
+            title="Ventas Totales"
+            value={formatCurrency(data.total_sales).replace('$', '')}
             prefix="$"
-            icon={DollarSign} 
-            trend={data.variation_pct} 
+            icon={DollarSign}
+            trend={data.variation_pct}
           />
-          <KPICard 
-            title="Ganancia Bruta" 
-            value={`${formatCurrency(data.gross_profit).replace('$', '')} (${data.margin_pct.toFixed(1)}%)`} 
+          <KPICard
+            title="Ganancia Bruta"
+            value={`${formatCurrency(data.gross_profit).replace('$', '')} (${data.margin_pct.toFixed(1)}%)`}
             prefix="$"
-            icon={Target} 
+            icon={Target}
           />
-          <KPICard 
-            title="Ticket Promedio" 
-            value={formatCurrency(data.ticket_promedio).replace('$', '')} 
+          <KPICard
+            title="Ticket Promedio"
+            value={formatCurrency(data.ticket_promedio).replace('$', '')}
             prefix="$"
-            icon={ShoppingCart} 
+            icon={ShoppingCart}
           />
-          <KPICard 
-            title="Nuevos Clientes" 
-            value={data.new_clients} 
-            icon={Users} 
+          <KPICard
+            title="Nuevos Clientes"
+            value={data.new_clients}
+            icon={Users}
           />
         </div>
       )}
 
-      {/* Alertas Rápidas */}
       {!isLoading && data && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-red-900/10 border border-red-900/30 p-6 rounded-2xl flex items-center justify-between">
